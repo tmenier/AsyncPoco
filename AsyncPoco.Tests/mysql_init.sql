@@ -2,7 +2,7 @@
 
 CREATE TABLE petapoco (
 
-	id				bigint AUTO_INCREMENT NOT NULL,
+	id				serial,
 	title			varchar(127) NOT NULL,
 	draft			BOOL NOT NULL,
 	date_created	datetime NOT NULL,
