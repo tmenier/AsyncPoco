@@ -248,7 +248,7 @@ namespace csj
 			Console.WriteLine(" <files>                    The set of C# (.cs) files to join (wildcards supported)");
 			Console.WriteLine("");
 			Console.WriteLine("eg:");
-			Console.WriteLine("> csj -o:PetaPoco.cs Database.cs -r *.cs -x:Properties\\AssemblyInfo.cs");
+			Console.WriteLine("> csj -o:AsyncPoco.cs Database.cs -r *.cs -x:Properties\\AssemblyInfo.cs");
 		}
 
 
