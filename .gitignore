@@ -3,3 +3,5 @@ obj
 *.suo
 *.nupkg
 packages
+csj/csj.exe
+csj/csj.pdb
