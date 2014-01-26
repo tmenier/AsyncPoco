@@ -38,7 +38,7 @@ namespace AsyncPoco.Tests
 			return db.ExecuteAsync(Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName)));
 		}
 
-		Task<long> GetRecordCount()
+		Task<long> GetRecordCountAsync()
 		{
 			return db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM petapoco");
 		}
@@ -51,7 +51,7 @@ namespace AsyncPoco.Tests
 			await db.DeleteAsync<petapoco2>("");
 
 			// Should be clean
-			Assert.AreEqual(GetRecordCount(), 0);
+			Assert.AreEqual(await GetRecordCountAsync(), 0);
 		}
 
 		poco CreatePoco()
@@ -401,7 +401,7 @@ namespace AsyncPoco.Tests
 			await db.DeleteAsync<deco>("WHERE id>=@0", id + 5);
 
 			// Check they match
-			Assert.AreEqual(GetRecordCount(), 5);
+			Assert.AreEqual(await GetRecordCountAsync(), 5);
 		}
 
 		[Test]
@@ -471,7 +471,7 @@ namespace AsyncPoco.Tests
 				scope.Complete();
 			}
 
-			Assert.AreEqual(GetRecordCount(), 10);
+			Assert.AreEqual(await GetRecordCountAsync(), 10);
 		}
 
 		[Test]
@@ -482,7 +482,7 @@ namespace AsyncPoco.Tests
 				await InsertRecordsAsync(10);
 			}
 
-			Assert.AreEqual(GetRecordCount(), 0);
+			Assert.AreEqual(await GetRecordCountAsync(), 0);
 		}
 
 		[Test]
@@ -498,7 +498,7 @@ namespace AsyncPoco.Tests
 				}
 			}
 
-			Assert.AreEqual(GetRecordCount(), 0);
+			Assert.AreEqual(await GetRecordCountAsync(), 0);
 		}
 
 		[Test]
@@ -515,7 +515,7 @@ namespace AsyncPoco.Tests
 				scope1.Complete();
 			}
 
-			Assert.AreEqual(GetRecordCount(), 0);
+			Assert.AreEqual(await GetRecordCountAsync(), 0);
 		}
 
 		[Test]
@@ -532,7 +532,7 @@ namespace AsyncPoco.Tests
 				}
 			}
 
-			Assert.AreEqual(GetRecordCount(), 0);
+			Assert.AreEqual(await GetRecordCountAsync(), 0);
 		}
 
 		[Test]
@@ -551,7 +551,7 @@ namespace AsyncPoco.Tests
 				scope1.Complete();
 			}
 
-			Assert.AreEqual(GetRecordCount(), 20);
+			Assert.AreEqual(await GetRecordCountAsync(), 20);
 		}
 
 		[Test]
@@ -576,7 +576,7 @@ namespace AsyncPoco.Tests
 				scope1.Complete();
 			}
 
-			Assert.AreEqual(GetRecordCount(), 0);
+			Assert.AreEqual(await GetRecordCountAsync(), 0);
 		}
 
 		[Test]

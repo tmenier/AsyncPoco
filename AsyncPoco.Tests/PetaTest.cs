@@ -577,14 +577,14 @@ namespace PetaTest
 			return (str == "yes" || str == "y" || str == "true" || str == "t" || str == "1");
 		}
 
-		public static int RunMain(string[] args)
+		public static Task<int> RunMainAsync(string[] args)
 		{
-			return new Runner().Run(args);
+			return new Runner().RunAsync(args);
 		}
 
 		// Run all test fixtures in the calling assembly - unless one or more
 		// marked as active in which case only those will be run
-		public int Run(string[] args)
+		public async Task<int> RunAsync(string[] args)
 		{
 			// Parse command line args
 			bool? showreport = null;
@@ -629,7 +629,8 @@ namespace PetaTest
 			var old = Console.Out;
 			Console.SetOut(Output);
 
-			RunInternal(Assembly.GetCallingAssembly(), null, null, runall ?? false);
+			// used to use GetCallingAssembly, which returned mscorlib when method was method was marked async
+			await RunInternalAsync(Assembly.GetEntryAssembly(), null, null, runall ?? false);
 
 			Console.SetOut(old);
 			totalTime.Stop();
@@ -662,7 +663,7 @@ namespace PetaTest
 		}
 
 		// Internally called to recursively run tests in an assembly, testfixture, test method etc...
-		private void RunInternal(object scope, object instance, object[] arguments, bool RunAll)
+		private async Task RunInternalAsync(object scope, object instance, object[] arguments, bool RunAll)
 		{
 			// Assembly?
 			var a = scope as Assembly;
@@ -671,7 +672,7 @@ namespace PetaTest
 				StartTest(a, null);
 				RunAll = RunAll || !a.HasActive();
 				foreach (var type in a.GetTypes().Where(i => i.IsTestFixture() && (RunAll || i.HasActive())))
-					RunInternal(type, null, null, RunAll);
+					await RunInternalAsync(type, null, null, RunAll);
 				EndTest();
 			}
 
@@ -685,14 +686,14 @@ namespace PetaTest
 					bool runAllTestMethods = RunAll || !t.HasActiveMethods();
 					foreach (TestFixtureAttribute tfa in t.GetCustomAttributes(typeof(TestFixtureAttribute), false).Where(x => runAllTestFixturesInstances || ((TestFixtureAttribute)x).Active))
 						foreach (var args in tfa.GetArguments(t, null))
-							RunInternal(t, null, args, runAllTestMethods);
+							await RunInternalAsync(t, null, args, runAllTestMethods);
 				}
 				else
 				{
 					StartTest(t, arguments);
 					var inst = CreateInstance(t, arguments);
 					if (inst != null)
-						RunInternal(null, inst, null, RunAll);
+						await RunInternalAsync(null, inst, null, RunAll);
 					EndTest();
 				}
 			}
@@ -703,13 +704,13 @@ namespace PetaTest
 				var tf = instance;
 				if (scope == null)
 				{
-					if (!RunSetupTeardown(instance, true, true))
+					if (!await RunSetupTeardownAsync(instance, true, true))
 						return;
 
 					foreach (var m in tf.GetType().GetMethods().Where(x => RunAll || x.IsActive()))
-						RunInternal(m, instance, null, RunAll);
+						await RunInternalAsync(m, instance, null, RunAll);
 
-					RunSetupTeardown(instance, false, true);
+					await RunSetupTeardownAsync(instance, false, true);
 				}
 
 				var method = scope as MethodInfo;
@@ -727,12 +728,12 @@ namespace PetaTest
 									continue;
 								}
 
-								RunInternal(method, instance, args, RunAll);
+								await RunInternalAsync(method, instance, args, RunAll);
 							}
 					}
 					else
 					{
-						RunTest(method, tf, arguments);
+						await RunTestAsync(method, tf, arguments);
 					}
 				}
 			}
@@ -740,20 +741,24 @@ namespace PetaTest
 		}
 
 		// Run a single test
-		public void RunTest(MethodInfo Target, object instance, object[] Params)
+		public async Task RunTestAsync(MethodInfo Target, object instance, object[] Params)
 		{
 
 			StartTest(Target, Params);
 			var sw = new Stopwatch();
 			try
 			{
-				if (!RunSetupTeardown(instance, true, false))
+				if (!await RunSetupTeardownAsync(instance, true, false))
 				{
 					EndTest();
 					return;
 				}
 				sw.Start();
-				Target.Invoke(instance, Params);
+
+				var task = Target.Invoke(instance, Params) as Task;
+				if (task != null)
+					await task;
+
 				Stats.Elapsed = sw.ElapsedMilliseconds;
 				Stats.Passed++;
 			}
@@ -768,14 +773,14 @@ namespace PetaTest
 				Output.WriteException(x);
 				Stats.Errors++;
 			}
-			RunSetupTeardown(instance, false, false);
+			await RunSetupTeardownAsync(instance, false, false);
 			EndTest();
 		}
 
 		Stopwatch _otherTimes = new Stopwatch();
 
 		[SkipInStackTrace]
-		public bool RunSetupTeardown(object instance, bool setup, bool fixture)
+		public async Task<bool> RunSetupTeardownAsync(object instance, bool setup, bool fixture)
 		{
 			try
 			{
@@ -785,7 +790,10 @@ namespace PetaTest
 					_otherTimes.Start();
 					try
 					{
-						m.Invoke(instance, null);
+						var task = m.Invoke(instance, null) as Task;
+						if (task != null)
+							await task;
+
 					}
 					finally
 					{

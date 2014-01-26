@@ -9,7 +9,7 @@ namespace AsyncPoco.Tests
 	{
 		public static void Main(string[] args)
 		{
-			PetaTest.Runner.RunMain(args);
+			PetaTest.Runner.RunMainAsync(args).Wait();
 		}
 	}
 }
