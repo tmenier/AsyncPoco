@@ -852,7 +852,7 @@ namespace AsyncPoco
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
-		/// <param name="func">Callback to process each result and return true to continue iterating or false to hault</param>
+		/// <param name="func">Callback to process each result, return false to stop iterating</param>
 		/// <remarks>
 		/// For some DB providers, care should be taken to not start a new Query before finishing with
 		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
@@ -887,7 +887,7 @@ namespace AsyncPoco
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
-		/// <param name="func">Callback to process each result and return true to continue iterating or false to hault</param>
+		/// <param name="func">Callback to process each result, return false to stop iterating</param>
 		/// <remarks>
 		/// For some DB providers, care should be taken to not start a new Query before finishing with
 		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
@@ -960,9 +960,25 @@ namespace AsyncPoco
 		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
 		/// returns the results as a List.
 		/// </remarks>
-		public Task QueryAsync<T>(Sql sql, Action<T> action)
+		public Task QueryAsync<T>(Sql sql, Action<T> action) 
 		{
 			return QueryAsync(sql.SQL, sql.Arguments, action);
+		}
+
+		/// <summary>
+		/// Runs an SQL query, asynchronously passing each result to a callback
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
+		/// <param name="func">Callback to process each result, return false to stop iterating</param>
+		/// <remarks>
+		/// For some DB providers, care should be taken to not start a new Query before finishing with
+		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		/// returns the results as a List.
+		/// </remarks>
+		public Task QueryAsync<T>(Sql sql, Func<T, bool> func) 
+		{
+			return QueryAsync(sql.SQL, sql.Arguments, func);
 		}
 
 		#endregion
