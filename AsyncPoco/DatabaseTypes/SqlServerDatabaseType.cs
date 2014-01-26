@@ -2,8 +2,10 @@
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
 
 using System;
+using System.Data.Common;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using AsyncPoco.Internal;
 
 namespace AsyncPoco.DatabaseTypes
@@ -24,9 +26,9 @@ namespace AsyncPoco.DatabaseTypes
 			return sqlPage;
 		}
 
-		public override object ExecuteInsert(Database db, System.Data.IDbCommand cmd, string PrimaryKeyName)
+		public override Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
-			return db.ExecuteScalarHelper(cmd);
+			return db.ExecuteScalarHelperAsync(cmd);
 		}
 
 		public override string GetExistsSql()

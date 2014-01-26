@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Data;
+using System.Threading.Tasks;
 using AsyncPoco.DatabaseTypes;
 using AsyncPoco.Internal;
 
@@ -122,10 +124,10 @@ namespace AsyncPoco.Internal
 		/// <param name="cmd">The insert command to be executed</param>
 		/// <param name="PrimaryKeyName">The primary key of the table being inserted into</param>
 		/// <returns>The ID of the newly inserted record</returns>
-		public virtual object ExecuteInsert(Database db, IDbCommand cmd, string PrimaryKeyName)
+		public virtual Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
 			cmd.CommandText += ";\nSELECT @@IDENTITY AS NewID;";
-			return db.ExecuteScalarHelper(cmd);
+			return db.ExecuteScalarHelperAsync(cmd);
 		}
 
 

@@ -2,7 +2,9 @@
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
 
 using System;
+using System.Data.Common;
 using System.Linq;
+using System.Threading.Tasks;
 using AsyncPoco.Internal;
 
 namespace AsyncPoco.DatabaseTypes
@@ -16,10 +18,10 @@ namespace AsyncPoco.DatabaseTypes
 			return sqlPage;
 		}
 
-		public override object ExecuteInsert(Database db, System.Data.IDbCommand cmd, string PrimaryKeyName)
+		public override async Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
-			db.ExecuteNonQueryHelper(cmd);
-			return db.ExecuteScalar<object>("SELECT @@@IDENTITY AS NewID;");
+			await db.ExecuteNonQueryHelperAsync(cmd);
+			return await db.ExecuteScalarAsync<object>("SELECT @@@IDENTITY AS NewID;");
 		}
 
 	}

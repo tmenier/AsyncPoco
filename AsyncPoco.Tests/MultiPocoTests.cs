@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using PetaTest;
 using AsyncPoco;
 
@@ -42,10 +43,10 @@ namespace AsyncPoco.Tests
 		Database db;
 
 		[TestFixtureSetUp]
-		public void CreateDB()
+		public async Task CreateDbAsync()
 		{
 			db = new Database(_connectionStringName);
-			db.Execute(@"
+			await db.ExecuteAsync(@"
 
 DROP TABLE IF EXISTS posts;
 DROP TABLE IF EXISTS authors;
@@ -68,42 +69,42 @@ CREATE TABLE authors (
 
 			var a1 = new author();
 			a1.name = "Bill";
-			db.Insert(a1);
+			await db.InsertAsync(a1);
 
 			var a2 = new author();
 			a2.name = "Ted";
-			db.Insert(a2);
+			await db.InsertAsync(a2);
 
 			var p = new post();
 			p.title = "post1";
 			p.author = a1.id;
-			db.Insert(p);
+			await db.InsertAsync(p);
 
 			p = new post();
 			p.title = "post2";
 			p.author = a1.id;
-			db.Insert(p);
+			await db.InsertAsync(p);
 
 			p = new post();
 			p.title = "post3";
 			p.author = a2.id;
-			db.Insert(p);
+			await db.InsertAsync(p);
 
 		}
 
 		[TestFixtureTearDown]
-		public void DeleteDB()
+		public Task DeleteDbAsync()
 		{
-			db.Execute(@"
+			return db.ExecuteAsync(@"
 DROP TABLE IF EXISTS posts;
 DROP TABLE IF EXISTS authors;
 			");
 		}
 
 		[Test]
-		public void Basic()
+		public async Task Basic()
 		{
-			var posts = db.Fetch<post, author>("SELECT * FROM posts LEFT JOIN authors ON posts.author = authors.id ORDER BY posts.id");
+			var posts = await db.FetchAsync<post, author>("SELECT * FROM posts LEFT JOIN authors ON posts.author = authors.id ORDER BY posts.id");
 			Assert.AreEqual(posts.Count, 3);
 
 			Assert.AreEqual(posts[0].id, 1);
@@ -121,9 +122,9 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public void CustomRelator()
+		public async Task CustomRelator()
 		{
-			var posts = db.Fetch<post, author, post>(
+			var posts = await db.FetchAsync<post, author, post>(
 				(p,a)=>
 					{
 						p.author_obj = a;
@@ -169,13 +170,13 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public void ManyToOne()
+		public async Task ManyToOne()
 		{
 			// This test uses a custom relator callback to connect posts to existing author instances
 			// Note that for each row, an author object is still created - it's just that the duplicates
 			// are discarded
 
-			var posts = db.Fetch<post, author, post>(new PostAuthorRelator().MapIt,
+			var posts = await db.FetchAsync<post, author, post>(new PostAuthorRelator().MapIt,
 				"SELECT * FROM posts LEFT JOIN authors ON posts.author = authors.id ORDER BY posts.id"
 				);
 
@@ -251,11 +252,11 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public void OneToMany()
+		public async Task OneToMany()
 		{
 			// Example of OneToMany mappings
 
-			var authors = db.Fetch<author, post, author>(new AuthorPostRelator().MapIt,
+			var authors = await db.FetchAsync<author, post, author>(new AuthorPostRelator().MapIt,
 				"SELECT * FROM authors LEFT JOIN posts ON posts.author = authors.id ORDER BY posts.id"
 				);
 
@@ -270,11 +271,11 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public void ManyToOne_Lambda()
+		public async Task ManyToOne_Lambda()
 		{
 			// same as ManyToOne test case above, but uses a lambda method as the callback
 			var authors = new Dictionary<long, author>();
-			var posts = db.Fetch<post, author, post>(
+			var posts = await db.FetchAsync<post, author, post>(
 				(p, a) =>
 				{
 					// Get existing author object
@@ -307,8 +308,5 @@ DROP TABLE IF EXISTS authors;
 			Assert.AreEqual(posts[2].author, 2);
 			Assert.AreEqual(posts[2].author_obj.name, "Ted");
 		}
-
-
 	}
-
 }

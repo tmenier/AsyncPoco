@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using System.IO;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace PetaTest
 {
@@ -355,9 +356,29 @@ namespace PetaTest
 			throw new AssertionException(string.Format("Failed to throw exception of type {0}", t.FullName));
 		}
 
-		public static TX Throws<TX>(Action code) where TX : Exception
+		public static async Task<Exception> ThrowsAsync(Type t, Func<Task> code)
+		{
+			try 
+			{
+				await code();
+			}
+			catch (Exception x) 
+			{
+				Throw(t.IsInstanceOfType(x), () => string.Format("Wrong exception type caught, expected {0} received {1}", t.FullName, Utils.FormatValue(x)));
+				return x;
+			}
+			throw new AssertionException(string.Format("Failed to throw exception of type {0}", t.FullName));
+		}
+
+
+		public static TX Throws<TX>(Action code) where TX : Exception 
 		{
 			return (TX)Throws(typeof(TX), code);
+		}
+
+		public static async Task<TX> ThrowsAsync<TX>(Func<Task> code) where TX : Exception
+		{
+			return (TX)(await ThrowsAsync(typeof(TX), code));
 		}
 
 		public static void DoesNotThrow(Action code)

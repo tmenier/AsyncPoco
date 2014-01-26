@@ -2,6 +2,8 @@
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
 
 using System;
+using System.Data.Common;
+using System.Threading.Tasks;
 using AsyncPoco.Internal;
 
 
@@ -17,16 +19,16 @@ namespace AsyncPoco.DatabaseTypes
 			return base.MapParameterValue(value);
 		}
 
-		public override object ExecuteInsert(Database db, System.Data.IDbCommand cmd, string PrimaryKeyName)
+		public override async Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
 			if (PrimaryKeyName != null)
 			{
 				cmd.CommandText += ";\nSELECT last_insert_rowid();";
-				return db.ExecuteScalarHelper(cmd);
+				return await db.ExecuteScalarHelperAsync(cmd);
 			}
 			else
 			{
-				db.ExecuteNonQueryHelper(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd);
 				return -1;
 			}
 		}

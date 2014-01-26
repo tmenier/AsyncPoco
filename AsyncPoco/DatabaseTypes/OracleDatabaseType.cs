@@ -3,6 +3,8 @@
 
 using System;
 using System.Data;
+using System.Data.Common;
+using System.Threading.Tasks;
 using AsyncPoco.Internal;
 
 
@@ -42,7 +44,7 @@ namespace AsyncPoco.DatabaseTypes
 			return null;
 		}
 
-		public override object ExecuteInsert(Database db, IDbCommand cmd, string PrimaryKeyName)
+		public override async Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
 			if (PrimaryKeyName != null)
 			{
@@ -53,12 +55,12 @@ namespace AsyncPoco.DatabaseTypes
 				param.Direction = ParameterDirection.ReturnValue;
 				param.DbType = DbType.Int64;
 				cmd.Parameters.Add(param);
-				db.ExecuteNonQueryHelper(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd);
 				return param.Value;
 			}
 			else
 			{
-				db.ExecuteNonQueryHelper(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd);
 				return -1;
 			}
 		}

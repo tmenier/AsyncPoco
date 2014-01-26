@@ -2,6 +2,8 @@
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
 
 using System;
+using System.Data.Common;
+using System.Threading.Tasks;
 using AsyncPoco.Internal;
 
 namespace AsyncPoco.DatabaseTypes
@@ -22,16 +24,16 @@ namespace AsyncPoco.DatabaseTypes
 			return string.Format("\"{0}\"", str);
 		}
 
-		public override object ExecuteInsert(Database db, System.Data.IDbCommand cmd, string PrimaryKeyName)
+		public override async Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
 			if (PrimaryKeyName != null)
 			{
 				cmd.CommandText += string.Format("returning {0} as NewID", EscapeSqlIdentifier(PrimaryKeyName));
-				return db.ExecuteScalarHelper(cmd);
+				return await db.ExecuteScalarHelperAsync(cmd);
 			}
 			else
 			{
-				db.ExecuteNonQueryHelper(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd);
 				return -1;
 			}
 		}
