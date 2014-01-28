@@ -1,29 +1,25 @@
-﻿<?xml version="1.0"?>
-<package xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-	<metadata xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
-		<id>PetaPoco</id>
-		<title>PetaPoco - A tiny ORMish thing for your POCOs (Core + T4 Templates)</title>
-		<version>5.0.1</version>
-		<authors>Topten Software</authors>
-		<owners>Topten Software</owners>
-		<licenseUrl>http://www.toptensoftware.com/petapoco/license</licenseUrl>
-		<projectUrl>http://www.toptensoftware.com/petapoco/</projectUrl>
-		<iconUrl>http://www.toptensoftware.com/petapoco/nuget_icon.png</iconUrl>
-		<requireLicenseAcceptance>true</requireLicenseAcceptance>
-		<description>
-PetaPoco is a tiny, single file .NET data access layer inspired by Massive that works with both non-dynamic POCO objects and dynamics.
-
-This package includes the core PetaPoco library + T4 templates to generate POCO classes from your database
-		</description>
-		<tags>ORM POCO MVC MVC2 MVC3 ASP.NET WebForms WebMatrix MySQL Database</tags>
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/01/nuspec.xsd">
+	<metadata>
+		<id>AsyncPoco</id>
+		<version>0.9.0</version>
+		<title>AsyncPoco</title>
+		<authors>tmenier</authors>
+		<projectUrl>https://github.com/tmenier/AsyncPoco</projectUrl>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>A fully asynchronous fork of the popular PetaPoco micro-ORM. Intended for use with the TAP pattern and async/await keywords introduced in C# 5.0 and VB 11. PetaPoco methods have been converted to their (awaitable) async equivalents (FetchAsync, InsertAsync, ExecuteAsync, etc.) in all cases where the underlying ADO.NET calls could be replaced by async equivalents. All PetaPoco unit tests have been converted to async and are passing for SQL Server, SQL Server CE, MySQL, and PostgreSQL. Currently in beta, this library has not yet been thoroughly tested in a production environment.</description>
+		<tags>orm micro-orm microorm micro petapoco database sql async await asynchronous poco</tags>
 		<frameworkAssemblies>
 			<frameworkAssembly assemblyName="System.Data" />
 			<frameworkAssembly assemblyName="System.Configuration" />
 		</frameworkAssemblies>
 	</metadata>
 	<files>
+		<file src="..\bin\Release\AsyncPoco.*" target="lib\net45" />
+		<!--
 		<file src="AsyncPoco.cs" target="Content\Models" />
 		<file src="Models\Generated\*.tt" target="Content\Models\Generated" />
 		<file src="Models\Generated\PetaPoco*" target="Content\Models\Generated" />
+		-->
 	</files>
 </package>

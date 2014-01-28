@@ -52,6 +52,7 @@
     <CodeAnalysisIgnoreBuiltInRules>true</CodeAnalysisIgnoreBuiltInRules>
     <CodeAnalysisFailOnMissingRules>false</CodeAnalysisFailOnMissingRules>
     <Prefer32Bit>false</Prefer32Bit>
+    <DocumentationFile>bin\Release\AsyncPoco.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -99,25 +100,22 @@
     <Compile Include="Utilities\Singleton.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="NuGet\AsyncPoco.Core.nuspec">
-      <SubType>Designer</SubType>
-    </None>
+    <None Include="NuGet\AsyncPoco.nuspec" />
     <None Include="PostBuild.bat" />
     <None Include="T4 Templates\AsyncPoco.Core.ttinclude" />
     <None Include="T4 Templates\AsyncPoco.Generator.ttinclude" />
     <None Include="T4 Templates\Database.tt">
       <LastGenOutput>Database.cs</LastGenOutput>
     </None>
-    <None Include="NuGet\AsyncPoco.nuspec">
-      <SubType>Designer</SubType>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>$(ProjectDir)\PostBuild.bat $(ConfigurationName)</PostBuildEvent>
+    <PostBuildEvent>cd $(ProjectDir)
+PostBuild.bat $(ConfigurationName)</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
