@@ -70,6 +70,10 @@ If you're not on .NET 4.5 or one of the supported database platforms, you're out
 
 No. But that's not the point of asynchronous code. The point is to free up threads while waiting on I/O-bound work to complete, making desktop and mobile apps more responsive and web applications more scalable. The context switching magic wired up by the compiler when async/await are used actually adds a small amount of overhead to the running code. Fortunately, some initial benchmarking shows no significant performance differences between PetaPoco and AsyncPoco.
 
-## Is it ready for prime time?
+## Where do I get it?
 
-Although all PetaPoco unit tests have been ported and are passing, this project is currently a work in progress and has <i>not</i> been thoroughly tested in any production environment. Ping me you're interested in contributing, testing, or otherwise helping to get this project to 1.0.
+The recommended way to install AsyncPoco is via the [NuGet package](https://www.nuget.org/packages/AsyncPoco/).
+
+`PM> Install-Package AsyncPoco`
+
+Note that while the [single file](https://github.com/tmenier/AsyncPoco/blob/master/AsyncPoco/AsyncPoco.cs) approach and [T4 templates](https://github.com/tmenier/AsyncPoco/tree/master/AsyncPoco/T4%20Templates) have been carried over from PetaPoco and are supported, neither is currently installed via NuGet, so you'll need to grab them directly from the source code. I will consider adding one or both to the package(s) if there is demand for them; feel free to [create an issue](https://github.com/tmenier/AsyncPoco/issues/new) to request it.
