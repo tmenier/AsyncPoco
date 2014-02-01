@@ -1,6 +1,8 @@
+####*UPDATE: On track for 1.0 release Monday Feb 3! Please follow [@AsyncPoco](https://twitter.com/AsyncPoco) on Twitter for further announcements.*
+
 # AsyncPoco
 
-## A tiny <i>async-y</i> ORM-ish thing for your POCOs
+## A tiny *async-y* ORM-ish thing for your POCOs
 
 AsyncPoco is a fork of the popular [PetaPoco](http://www.toptensoftware.com/petapoco) micro-ORM for .NET, with a fully asynchronous API and support for the async/await keywords in C# 5.0. It does not supercede PetaPoco; the two can peacefully co-exist in the same project if both synchronous and asynchronous data access is needed.
 
