@@ -100,7 +100,9 @@
     <Compile Include="Utilities\Singleton.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="NuGet\AsyncPoco.nuspec" />
+    <None Include="NuGet\AsyncPoco.nuspec">
+      <SubType>Designer</SubType>
+    </None>
     <None Include="PostBuild.bat" />
     <None Include="T4 Templates\AsyncPoco.Core.ttinclude" />
     <None Include="T4 Templates\AsyncPoco.Generator.ttinclude" />

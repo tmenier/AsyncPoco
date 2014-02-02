@@ -56,13 +56,13 @@ await db.QueryAsync<Article>("SELECT * FROM articles", a =>
 
 ## What databases are supported?
 
-All PetaPoco tests have been ported to their async equivalents and are passing with SQL Server 2008 R2, SQL Server CE, MySQL, and PostgreSQL. To my knowledge, AsyncPoco has not been deployed any production environment yet, but I intend to do so soon in an ASP.NET MVC / SQL Server 2008 R2 environment soon. For other platforms, proceed with caution for now and please let me know your findings - I'll update this section and gladly credit you for any help verifying platform support.
+All PetaPoco tests have been ported to their async equivalents and are passing with SQL Server 2008 R2, SQL Server CE, MySQL, and PostgreSQL. I'm personally using it in a busy ASP.NET MVC application with SQL Server 2008 R2 and it is performing well. For other platforms, proceed with caution for now and please let me know your findings; I'll update this section and gladly credit you for any help in verifying stability on other platforms.
 
-## When should I use it?
+## Why should I use it?
 
-If you're finding that threads in your application are spending a significant percentage of CPU time waiting for database calls to return, you should notice big improvements with AsyncPoco. If you're already writing asynchronous code on .NET 4.5 and using a supported database platform, there's virtually no reason to prefer PetaPoco over AsyncPoco.
+If you're finding that threads in your application are spending a significant percentage of CPU time waiting for database calls to complete, you should notice big improvements with AsyncPoco. If you're already writing asynchronous code on .NET 4.5 and using a supported database platform, there's virtually no reason to prefer PetaPoco over AsyncPoco.
 
-## When shouldn't I use it?
+## Why shouldn't I use it?
 
 If you're not on .NET 4.5 or one of the supported database platforms, you're out of luck. Also bear in mind that if you're not already coding against asynchronous APIs using async/await and the TAP pattern, You may be committing yourself to a substantial number of changes to your code base. Going only partially async is an [invitation for deadlocks](http://blog.stephencleary.com/2012/07/dont-block-on-async-code.html); you'll want to use async all the way up and down your call stack. If you're dealing with legacy code and don't have the time/resources to make that leap, AsyncPoco is probably not a good fit.
 

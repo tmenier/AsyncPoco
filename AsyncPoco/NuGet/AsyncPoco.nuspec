@@ -6,7 +6,8 @@
 		<title>AsyncPoco</title>
 		<authors>tmenier</authors>
 		<projectUrl>https://github.com/tmenier/AsyncPoco</projectUrl>
-		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<licenseUrl>http://www.toptensoftware.com/petapoco/license</licenseUrl>
+		<requireLicenseAcceptance>true</requireLicenseAcceptance>
 		<description>A fully asynchronous fork of the popular PetaPoco micro-ORM. Intended for use with the TAP pattern and async/await keywords introduced in C# 5.0 and VB 11. PetaPoco methods have been converted to their (awaitable) async equivalents (FetchAsync, InsertAsync, ExecuteAsync, etc.) in all cases where the underlying ADO.NET calls could be replaced by async equivalents. All PetaPoco unit tests have been converted to async and are passing for SQL Server, SQL Server CE, MySQL, and PostgreSQL. Currently in beta, this library has not yet been thoroughly tested in a production environment.</description>
 		<tags>orm micro-orm microorm micro petapoco database sql async await asynchronous poco</tags>
 		<frameworkAssemblies>

@@ -1,4 +1,6 @@
-﻿/* PetaPoco - A Tiny ORMish thing for your POCO's.
+﻿/* AsyncPoco is a fork of PetaPoco and is bound by the same licensing terms.
+ *
+ * PetaPoco - A Tiny ORMish thing for your POCO's.
  * Copyright © 2011-2012 Topten Software.  All Rights Reserved.
  * 
  * Apache License 2.0 - http://www.toptensoftware.com/petapoco/license

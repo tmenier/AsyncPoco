@@ -1,4 +1,7 @@
-Copyright (C) 2011-2011 Topten Software (contact@toptensoftware.com)
+AsyncPoco - Copyright (C) 2014 (tmenier@gmail.com)
+AsyncPoco is a fork of PetaPoco and is bound by the same licensing terms.
+
+PetaPoco - Copyright (C) 2011-2011 Topten Software (contact@toptensoftware.com)
 All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
