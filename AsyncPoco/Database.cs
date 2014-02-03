@@ -28,17 +28,17 @@ using AsyncPoco.Internal;
 namespace AsyncPoco
 {
 	/// <summary>
-	/// The main PetaPoco Database class.  You can either use this class directly, or derive from it.
+	/// The main Database class.  You can either use this class directly, or derive from it.
 	/// </summary>
 	public class Database : IDisposable
 	{
 		#region Constructors
 		/// <summary>
-		/// Construct a database using a supplied IDbConnection
+		/// Construct a database using a supplied DbConnection
 		/// </summary>
-		/// <param name="connection">The IDbConnection to use</param>
+		/// <param name="connection">The DbConnection to use</param>
 		/// <remarks>
-		/// The supplied IDbConnection will not be closed/disposed by PetaPoco - that remains
+		/// The supplied DbConnection will not be closed/disposed by PetaPoco - that remains
 		/// the responsibility of the caller.
 		/// </remarks>
 		public Database(DbConnection connection)
@@ -68,7 +68,7 @@ namespace AsyncPoco
 		/// Construct a Database using a supplied connection string and a DbProviderFactory
 		/// </summary>
 		/// <param name="connectionString">The connection string to use</param>
-		/// <param name="provider">The DbProviderFactory to use for instantiating IDbConnection's</param>
+		/// <param name="provider">The DbProviderFactory to use for instantiating DbConnection's</param>
 		public Database(string connectionString, DbProviderFactory provider)
 		{
 			_connectionString = connectionString;
@@ -115,7 +115,7 @@ namespace AsyncPoco
 			EnableAutoSelect = true;
 			EnableNamedParams = true;
 
-			// If a provider name was supplied, get the IDbProviderFactory for it
+			// If a provider name was supplied, get the DbProviderFactory for it
 			if (_providerName != null)
 				_factory = DbProviderFactories.GetFactory(_providerName);
 
@@ -453,11 +453,11 @@ namespace AsyncPoco
 		/// <summary>
 		/// Called when DB connection opened
 		/// </summary>
-		/// <param name="conn">The newly opened IDbConnection</param>
-		/// <returns>The same or a replacement IDbConnection</returns>
+		/// <param name="conn">The newly opened DbConnection</param>
+		/// <returns>The same or a replacement DbConnection</returns>
 		/// <remarks>
 		/// Override this method to provide custom logging of opening connection, or
-		/// to provide a proxy IDbConnection.
+		/// to provide a proxy DbConnection.
 		/// </remarks>
 		public virtual DbConnection OnConnectionOpened(DbConnection conn) 
 		{ 
