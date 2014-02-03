@@ -1,14 +1,12 @@
-####*UPDATE: On track for 1.0 release Monday Feb 3! Please follow [@AsyncPoco](https://twitter.com/AsyncPoco) on Twitter for further announcements.*
-
 # AsyncPoco
 
 ## A tiny *async-y* ORM-ish thing for your POCOs
 
-AsyncPoco is a fork of the popular [PetaPoco](http://www.toptensoftware.com/petapoco) micro-ORM for .NET, with a fully asynchronous API and support for the async/await keywords in C# 5.0. It does not supercede PetaPoco; the two can peacefully co-exist in the same project if both synchronous and asynchronous data access is needed.
+AsyncPoco is a fork of the popular [PetaPoco](http://www.toptensoftware.com/petapoco) micro-ORM for .NET, with a fully asynchronous API and support for the async/await keywords in C# 5.0 and VB 11. It does not supercede PetaPoco; the two can peacefully co-exist in the same project. When making the decision to go asynchronous, it's generally best to go "all in", but keeping both around can be helpful while making a gradual transition.
 
 ## How do I use it?
 
-If you're familiar with PetaPoco and the [TAP pattern](http://msdn.microsoft.com/en-us/library/hh873175.aspx) for asynchronous programming in .NET 4.5, you should easily be able to figure out how to use AsyncPoco. If you're new to PetaPoco, I highly recommend reading [their excellent tutorial](http://www.toptensoftware.com/petapoco) first. Then just note that the TAP pattern was followed consistently in porting PetaPoco's synchronous public methods to their async equivalents. In other words, all public methods that interact with the database were given an `Async` suffix, and instead of returning `void` or `T`, they return `Task` or `Task<T>`, respectively.
+If you're familiar with PetaPoco and the [TAP pattern](http://msdn.microsoft.com/en-us/library/hh873175.aspx) for asynchronous programming in .NET 4.5, you should easily be able to figure out how to use AsyncPoco. If you're new to PetaPoco, I highly recommend reading [the excellent tutorial](http://www.toptensoftware.com/petapoco) first. Then just note that the TAP pattern was followed consistently in porting PetaPoco's synchronous public methods to their async equivalents. In other words, all public methods that interact with the database were given an `Async` suffix, and instead of returning `void` or `T`, they return `Task` or `Task<T>`, respectively, and are designed to be `await`ed.
 
 Here are some examples taken directly from the PetaPoco tutorial and converted to their AsyncPoco equivalent:
 
@@ -56,7 +54,7 @@ await db.QueryAsync<Article>("SELECT * FROM articles", a =>
 
 ## What databases are supported?
 
-All PetaPoco tests have been ported to their async equivalents and are passing with SQL Server 2008 R2, SQL Server CE, MySQL, and PostgreSQL. I'm personally using it in a busy ASP.NET MVC application with SQL Server 2008 R2 and it is performing well. For other platforms, proceed with caution for now and please let me know your findings; I'll update this section and gladly credit you for any help in verifying stability on other platforms.
+All PetaPoco tests have been ported to their async equivalents and are passing when run against SQL Server 2008 R2, SQL Server CE, MySQL, and PostgreSQL. I'm personally using it in a busy ASP.NET MVC application with SQL Server 2008 R2 and it is performing well. For other platforms, proceed with caution for now and please let me know your findings; I'll update this section and gladly credit you for any help in verifying stability on other platforms.
 
 ## Why should I use it?
 
@@ -76,4 +74,19 @@ The recommended way to install AsyncPoco is via the [NuGet package](https://www.
 
 `PM> Install-Package AsyncPoco`
 
-Note that while the [single file](https://github.com/tmenier/AsyncPoco/blob/master/AsyncPoco/AsyncPoco.cs) approach and [T4 templates](https://github.com/tmenier/AsyncPoco/tree/master/AsyncPoco/T4%20Templates) have been carried over from PetaPoco and are supported, neither is currently installed via NuGet, so you'll need to grab them directly from the source code. I will consider adding one or both to the package(s) if there is demand for them; feel free to [create an issue](https://github.com/tmenier/AsyncPoco/issues/new) to request it.
+Note that while the [single file](https://github.com/tmenier/AsyncPoco/blob/master/AsyncPoco/AsyncPoco.cs) approach and [T4 templates](https://github.com/tmenier/AsyncPoco/tree/master/AsyncPoco/T4%20Templates) have been carried over from PetaPoco and are supported, neither is currently installed via NuGet, so you'll need to grab them directly from the source code for now. I don't know if these are things that people want, so I encourage you to [create an issue](https://github.com/tmenier/AsyncPoco/issues/new) to request them and I'll consider adding them.
+
+## How do I get help?
+
+- Ask specific programming questions on [Stack Overflow](http://stackoverflow.com/questions/ask?tags=asyncpoco+petapoco+c%23+orm+micro-orm+async-await). I'll answer personally (unless someone beats me to it).
+- For announcements and (light) discussions, follow [@AsyncPoco](https://twitter.com/AsyncPoco) on Twitter.
+- To report bugs or suggest improvements, no matter how opinionated, [create an issue](https://github.com/tmenier/AsyncPoco/issues/new).
+- To contact me personally, email tmenier at that google mail service dot com.
+
+## How do I contribute?
+
+Judging by the [open issues](https://github.com/tmenier/AsyncPoco/issues?page=1&state=open), there's not a lot of coding to be done right now, but feel free to contact me if you're interested in contributing down the road. At this point, the best way to help by far is to start using it (especially with databases other than SQL Server), [report](https://github.com/tmenier/AsyncPoco/issues/new) your findings/opinions, and help build a roadmap for the next version. I'd also be grateful for your help spreading the word via Twitter, blog, etc.
+
+## Credit where credit is due
+
+Well over 90% of this code is the brainchild of Brad Robinson ([@toptensoftware](https://twitter.com/toptensoftware)); I'm merely riding the coattails of [PetaPoco](http://www.toptensoftware.com/petapoco)'s success. Brad in turn credits Rob Conery ([@robconery](https://twitter.com/robconery)) for original inspiration (ie: [Massive](https://github.com/robconery/massive)) and for use of [Subsonic](https://github.com/subsonic/SubSonic-3.0)'s T4 templates, Rob Sullivan ([@DataChomp](https://twitter.com/DataChomp)) for hard core DBA advice, and Adam Schroder ([@schotime](https://twitter.com/schotime)) for lots of suggestions, improvements and Oracle support.
