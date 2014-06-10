@@ -895,7 +895,46 @@ namespace AsyncPoco
 		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
 		/// returns the results as a List.
 		/// </remarks>
-		public async Task QueryAsync<T>(string sql, object[] args, Func<T, bool> func) 
+	     public async Task QueryAsync<T>(string sql, object[] args, Func<T, bool> func) 
+         {
+            using (var queryReader = await QueryAsync<T>(sql, args))
+            {
+                var keepGoing = true;
+                while (keepGoing)
+                {
+                    T poco;
+                    try
+                    {
+                        if (!await queryReader.MoveNext())
+                            break;
+
+                        poco = queryReader.Current;
+                    }
+                    catch (Exception x)
+                    {
+                        if (OnException(x))
+                            throw;
+
+                        break;
+                    }
+
+                    keepGoing = func(poco);
+                }
+            }
+		}
+
+        /// <summary>
+        /// Runs an SQL query that uses a reader to await on getting each value
+        /// </summary>
+        /// <typeparam name="T">The Type representing a row in the result set</typeparam>
+        /// <param name="sql">The SQL query</param>
+        /// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+        /// <remarks>
+        /// For some DB providers, care should be taken to not start a new Query before finishing with
+        /// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+        /// returns the results as a List.
+        /// </remarks>
+		public async Task<QueryReader<T>> QueryAsync<T>(string sql, object[] args) 
 		{
 			if (EnableAutoSelect)
 				sql = AutoSelectHelper.AddSelectClause<T>(_dbType, sql);
@@ -905,7 +944,7 @@ namespace AsyncPoco
 			{
 				using (var cmd = CreateCommand(_sharedConnection, sql, args))
 				{
-					DbDataReader r;
+					DbDataReader r = null;
 					var pd = PocoData.ForType(typeof(T));
 					try
 					{
@@ -916,33 +955,9 @@ namespace AsyncPoco
 					{
 						if (OnException(x))
 							throw;
-
-						return;
 					}
 					var factory = pd.GetFactory(cmd.CommandText, _sharedConnection.ConnectionString, 0, r.FieldCount, r) as Func<IDataReader, T>;
-					using (r) {
-						var keepGoing = true;
-						while (keepGoing)
-						{
-							T poco;
-							try
-							{
-								if (!await r.ReadAsync())
-									break;
-
-								poco = factory(r);
-							}
-							catch (Exception x)
-							{
-								if (OnException(x))
-									throw;
-
-								break;
-							}
-
-							keepGoing = func(poco);
-						}
-					}
+				    return new QueryReader<T>(this, r, factory);
 				}
 			}
 			finally
