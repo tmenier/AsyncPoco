@@ -905,7 +905,7 @@ namespace AsyncPoco
                     T poco;
                     try
                     {
-                        if (!await queryReader.MoveNext())
+                        if (!await queryReader.MoveNextAsync())
                             break;
 
                         poco = queryReader.Current;
@@ -936,34 +936,29 @@ namespace AsyncPoco
         /// </remarks>
 		public async Task<QueryReader<T>> QueryAsync<T>(string sql, object[] args) 
 		{
-			if (EnableAutoSelect)
-				sql = AutoSelectHelper.AddSelectClause<T>(_dbType, sql);
+            if (EnableAutoSelect)
+                sql = AutoSelectHelper.AddSelectClause<T>(_dbType, sql);
 
-			await OpenSharedConnectionAsync();
-			try
-			{
-				using (var cmd = CreateCommand(_sharedConnection, sql, args))
-				{
-					DbDataReader r = null;
-					var pd = PocoData.ForType(typeof(T));
-					try
-					{
-						r = await cmd.ExecuteReaderAsync();
-						OnExecutedCommand(cmd);
-					}
-					catch (Exception x)
-					{
-						if (OnException(x))
-							throw;
-					}
-					var factory = pd.GetFactory(cmd.CommandText, _sharedConnection.ConnectionString, 0, r.FieldCount, r) as Func<IDataReader, T>;
-				    return new QueryReader<T>(this, r, factory);
-				}
-			}
-			finally
-			{
-				CloseSharedConnection();
-			}
+            await OpenSharedConnectionAsync();
+            var cmd = CreateCommand(_sharedConnection, sql, args);
+            DbDataReader r = null;
+            var pd = PocoData.ForType(typeof(T));
+            Func<IDataReader, T> factory = null;
+            try
+            {
+                r = await cmd.ExecuteReaderAsync();
+                factory = pd.GetFactory(cmd.CommandText, _sharedConnection.ConnectionString, 0, r.FieldCount, r) as Func<IDataReader, T>;
+                OnExecutedCommand(cmd);
+            }
+            catch (Exception x)
+            {
+                CloseSharedConnection();
+                if (OnException(x))
+                {
+                    throw;
+                }
+            }
+            return new QueryReader<T>(this, cmd, r, factory);
 		}
 
 		/// <summary>

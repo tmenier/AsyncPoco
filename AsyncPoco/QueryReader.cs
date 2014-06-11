@@ -9,16 +9,18 @@ namespace AsyncPoco
     {
         private readonly Database database;
         private readonly DbDataReader dataReader;
+        private readonly IDbCommand command;
         private readonly Func<IDataReader, T> factory;
 
-        public QueryReader(Database database, DbDataReader dataReader, Func<IDataReader, T> factory)
+        public QueryReader(Database database, IDbCommand command, DbDataReader dataReader, Func<IDataReader, T> factory)
         {
             this.database = database;
+            this.command = command;
             this.dataReader = dataReader;
             this.factory = factory;
         }
 
-        public async Task<bool> MoveNext()
+        public async Task<bool> MoveNextAsync()
         {
             try
             {
@@ -43,7 +45,10 @@ namespace AsyncPoco
 
         public void Dispose()
         {
+            database.CloseSharedConnection();
+            command.Dispose();
             dataReader.Dispose();
         }
     }
+
 }
