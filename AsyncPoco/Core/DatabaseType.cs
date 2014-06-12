@@ -140,30 +140,34 @@ namespace AsyncPoco.Internal
 		public static DatabaseType Resolve(string TypeName, string ProviderName)
 		{
 			// Try using type name first (more reliable)
-			if (TypeName.StartsWith("MySql")) 
-				return Singleton<MySqlDatabaseType>.Instance;
-			if (TypeName.StartsWith("SqlCe")) 
-				return Singleton<SqlServerCEDatabaseType>.Instance;
-			if (TypeName.StartsWith("Npgsql") || TypeName.StartsWith("PgSql")) 
-				return Singleton<PostgreSQLDatabaseType>.Instance;
-			if (TypeName.StartsWith("Oracle")) 
-				return Singleton<OracleDatabaseType>.Instance;
-			if (TypeName.StartsWith("SQLite")) 
-				return Singleton<SQLiteDatabaseType>.Instance;
-			if (TypeName.StartsWith("System.Data.SqlClient.")) 
-				return Singleton<SqlServerDatabaseType>.Instance;
-			
+			if (!string.IsNullOrEmpty(TypeName)) {
+				if (TypeName.StartsWith("MySql"))
+					return Singleton<MySqlDatabaseType>.Instance;
+				if (TypeName.StartsWith("SqlCe"))
+					return Singleton<SqlServerCEDatabaseType>.Instance;
+				if (TypeName.StartsWith("Npgsql") || TypeName.StartsWith("PgSql"))
+					return Singleton<PostgreSQLDatabaseType>.Instance;
+				if (TypeName.StartsWith("Oracle"))
+					return Singleton<OracleDatabaseType>.Instance;
+				if (TypeName.StartsWith("SQLite"))
+					return Singleton<SQLiteDatabaseType>.Instance;
+				if (TypeName.StartsWith("System.Data.SqlClient."))
+					return Singleton<SqlServerDatabaseType>.Instance;
+			}
+
 			// Try again with provider name
-			if (ProviderName.IndexOf("MySql", StringComparison.InvariantCultureIgnoreCase) >= 0) 
-				return Singleton<MySqlDatabaseType>.Instance;
-			if (ProviderName.IndexOf("SqlServerCe", StringComparison.InvariantCultureIgnoreCase) >= 0) 
-				return Singleton<SqlServerCEDatabaseType>.Instance;
-			if (ProviderName.IndexOf("pgsql", StringComparison.InvariantCultureIgnoreCase) >= 0) 
-				return Singleton<PostgreSQLDatabaseType>.Instance;
-			if (ProviderName.IndexOf("Oracle", StringComparison.InvariantCultureIgnoreCase) >= 0) 
-				return Singleton<OracleDatabaseType>.Instance;
-			if (ProviderName.IndexOf("SQLite", StringComparison.InvariantCultureIgnoreCase) >= 0) 
-				return Singleton<SQLiteDatabaseType>.Instance;
+			if (!string.IsNullOrEmpty(ProviderName)) {
+				if (ProviderName.IndexOf("MySql", StringComparison.InvariantCultureIgnoreCase) >= 0)
+					return Singleton<MySqlDatabaseType>.Instance;
+				if (ProviderName.IndexOf("SqlServerCe", StringComparison.InvariantCultureIgnoreCase) >= 0)
+					return Singleton<SqlServerCEDatabaseType>.Instance;
+				if (ProviderName.IndexOf("pgsql", StringComparison.InvariantCultureIgnoreCase) >= 0)
+					return Singleton<PostgreSQLDatabaseType>.Instance;
+				if (ProviderName.IndexOf("Oracle", StringComparison.InvariantCultureIgnoreCase) >= 0)
+					return Singleton<OracleDatabaseType>.Instance;
+				if (ProviderName.IndexOf("SQLite", StringComparison.InvariantCultureIgnoreCase) >= 0)
+					return Singleton<SQLiteDatabaseType>.Instance;
+			}
 
 			// Assume SQL Server
 			return Singleton<SqlServerDatabaseType>.Instance;

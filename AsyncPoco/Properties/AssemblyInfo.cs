@@ -6,13 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("AsyncPoco")]
-[assembly: AssemblyDescription("A Tiny ORMish thing for your POCO's.")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Topten Software")]
+[assembly: AssemblyVersion("1.0.1.*")]
+[assembly: AssemblyDescription("A fully asynchronous fork of the popular PetaPoco micro-ORM.")]
+[assembly: AssemblyCompany("Topten Software, Todd Menier")]
 [assembly: AssemblyProduct("AsyncPoco")]
-[assembly: AssemblyCopyright("Copyright © 2011-2012. Topten Software")]
-[assembly: AssemblyTrademark("")]
-[assembly: AssemblyCulture("")]
+[assembly: AssemblyCopyright("Copyright © Todd Menier 2014, PetaPoco Copyright © 2011-2012 Topten Software")]
 
 // Setting ComVisible to false makes the types in this assembly not visible 
 // to COM components.  If you need to access a type in this assembly from 
@@ -32,6 +30,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("5.0.1.*")]
 
 [assembly: InternalsVisibleTo("AsyncPoco.Tests")]
