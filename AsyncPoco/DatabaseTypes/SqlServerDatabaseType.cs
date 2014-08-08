@@ -34,7 +34,7 @@ namespace AsyncPoco.DatabaseTypes
 
 		public override string GetExistsSql()
 		{
-			return "IF EXISTS (SELECT 1 FROM {0} WHERE {1}) SELECT 1 ELSE SELECT 0";
+			return "IF EXISTS (SELECT 1 FROM [{0}] WHERE {1}) SELECT 1 ELSE SELECT 0";
 		}
 
 		public override string GetInsertOutputClause(string primaryKeyName)
