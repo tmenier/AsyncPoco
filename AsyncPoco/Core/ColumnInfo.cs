@@ -26,8 +26,19 @@ namespace AsyncPoco
 
 		/// <summary>
 		/// True if this column returns a calculated value from the database and shouldn't be used in Insert and Update operations.
+		/// The column will not be included in Select operations by default.
 		/// </summary>
 		public bool ResultColumn
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// True if this column returns a calculated value from the database and shouldn't be used in Insert and Update operations.
+		/// The column will be included in Select operations by default.
+		/// </summary>
+		public bool ComputedColumn
 		{
 			get;
 			set;
@@ -77,6 +88,8 @@ namespace AsyncPoco
 				ci.ForceToUtc = colattr.ForceToUtc;
 				if ((colattr as ResultColumnAttribute) != null)
 					ci.ResultColumn = true;
+				if ((colattr as ComputedColumnAttribute) != null)
+					ci.ComputedColumn = true;
 
 			}
 			else
@@ -84,6 +97,7 @@ namespace AsyncPoco
 				ci.ColumnName = pi.Name;
 				ci.ForceToUtc = false;
 				ci.ResultColumn = false;
+				ci.ComputedColumn = false;
 			}
 
 			return ci;

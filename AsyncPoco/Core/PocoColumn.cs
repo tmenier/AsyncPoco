@@ -12,6 +12,7 @@ namespace AsyncPoco.Internal
 		public string ColumnName;
 		public PropertyInfo PropertyInfo;
 		public bool ResultColumn;
+		public bool ComputedColumn;
 		public bool ForceToUtc;
 		public virtual void SetValue(object target, object val) { PropertyInfo.SetValue(target, val, null); }
 		public virtual object GetValue(object target) { return PropertyInfo.GetValue(target, null); }

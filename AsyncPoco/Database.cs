@@ -1226,6 +1226,10 @@ namespace AsyncPoco
 							if (i.Value.ResultColumn)
 								continue;
 
+							// Don't insert computed columns
+							if (i.Value.ComputedColumn)
+								continue;
+
 							// Don't insert the primary key (except under oracle where we need bring in the next sequence value)
 							if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true)==0)
 							{
@@ -1366,6 +1370,10 @@ namespace AsyncPoco
 
 								// Dont update result only columns
 								if (i.Value.ResultColumn)
+									continue;
+
+								// Dont update computed columns
+								if (i.Value.ComputedColumn)
 									continue;
 
 								// Build the sql

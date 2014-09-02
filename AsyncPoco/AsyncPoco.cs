@@ -1234,6 +1234,10 @@ namespace AsyncPoco
 							if (i.Value.ResultColumn)
 								continue;
 
+							// Don't insert computed columns
+							if (i.Value.ComputedColumn)
+								continue;
+
 							// Don't insert the primary key (except under oracle where we need bring in the next sequence value)
 							if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true)==0)
 							{
@@ -1374,6 +1378,10 @@ namespace AsyncPoco
 
 								// Dont update result only columns
 								if (i.Value.ResultColumn)
+									continue;
+
+								// Dont update computed columns
+								if (i.Value.ComputedColumn)
 									continue;
 
 								// Build the sql
@@ -2403,6 +2411,25 @@ namespace AsyncPoco
 	}
 
 
+
+	/// <summary>
+	/// Marks a poco property as a computed column that is populated in queries
+	/// but not used for updates or inserts.
+	/// </summary>
+	[AttributeUsage(AttributeTargets.Property)]
+	public class ComputedColumnAttribute : ColumnAttribute
+	{
+		public ComputedColumnAttribute()
+		{
+		}
+
+		public ComputedColumnAttribute(string name)
+			: base(name)
+		{
+		}
+	}
+
+
 	/// <summary>
 	/// Poco classes marked with the Explicit attribute require all column properties to 
 	/// be marked with the Column attribute
@@ -2458,6 +2485,7 @@ namespace AsyncPoco
 
 	/// <summary>
 	/// Marks a poco property as a result only column that is populated in queries
+	/// when explicitly named
 	/// but not used for updates or inserts.
 	/// </summary>
 	[AttributeUsage(AttributeTargets.Property)]
@@ -2538,8 +2566,19 @@ namespace AsyncPoco
 
 		/// <summary>
 		/// True if this column returns a calculated value from the database and shouldn't be used in Insert and Update operations.
+		/// The column will not be included in Select operations by default.
 		/// </summary>
 		public bool ResultColumn
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// True if this column returns a calculated value from the database and shouldn't be used in Insert and Update operations.
+		/// The column will be included in Select operations by default.
+		/// </summary>
+		public bool ComputedColumn
 		{
 			get;
 			set;
@@ -2589,6 +2628,8 @@ namespace AsyncPoco
 				ci.ForceToUtc = colattr.ForceToUtc;
 				if ((colattr as ResultColumnAttribute) != null)
 					ci.ResultColumn = true;
+				if ((colattr as ComputedColumnAttribute) != null)
+					ci.ComputedColumn = true;
 
 			}
 			else
@@ -2596,6 +2637,7 @@ namespace AsyncPoco
 				ci.ColumnName = pi.Name;
 				ci.ForceToUtc = false;
 				ci.ResultColumn = false;
+				ci.ComputedColumn = false;
 			}
 
 			return ci;
@@ -3539,6 +3581,7 @@ namespace AsyncPoco
 			public string ColumnName;
 			public PropertyInfo PropertyInfo;
 			public bool ResultColumn;
+			public bool ComputedColumn;
 			public bool ForceToUtc;
 			public virtual void SetValue(object target, object val) { PropertyInfo.SetValue(target, val, null); }
 			public virtual object GetValue(object target) { return PropertyInfo.GetValue(target, null); }
@@ -3607,6 +3650,7 @@ namespace AsyncPoco
 					pc.PropertyInfo = pi;
 					pc.ColumnName = ci.ColumnName;
 					pc.ResultColumn = ci.ResultColumn;
+					pc.ComputedColumn = ci.ComputedColumn;
 					pc.ForceToUtc = ci.ForceToUtc;
 
 					// Store it
