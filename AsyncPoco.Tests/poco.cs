@@ -83,4 +83,13 @@ namespace AsyncPoco.Tests
 		public string email { get; set; }
 		public string name { get; set; }
 	}
+
+	[TableName("composite_pk")]
+	[PrimaryKey("id1, id2")]
+	class composite_pk
+	{
+		public int id1 { get; set; }
+		public int id2 { get; set; }
+		public string value { get; set; }
+	}
 }

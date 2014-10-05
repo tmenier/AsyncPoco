@@ -9,7 +9,6 @@ using System.Data;
 using System.Reflection.Emit;
 using System.Linq;
 using System.Linq.Expressions;
-using AsyncPoco.Internal;
 
 namespace AsyncPoco.Internal
 {

@@ -22,3 +22,12 @@ CREATE TABLE petapoco2 (
 	name		varchar(127) NOT NULL,
 	PRIMARY KEY (email)
 ) ENGINE=INNODB;
+
+DROP TABLE IF EXISTS composite_pk;
+
+CREATE TABLE composite_pk (
+	id1		int NOT NULL,
+	id2		int NOT NULL,
+	value	varchar(100) NOT NULL,
+	PRIMARY KEY (id1, id2)
+) ENGINE=INNODB;

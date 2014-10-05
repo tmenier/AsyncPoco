@@ -24,3 +24,13 @@ CREATE TABLE petapoco2 (
 	name		varchar(127) NOT NULL,
 	PRIMARY KEY (email)
 );
+
+IF OBJECT_ID('dbo.composite_pk','U') IS NOT NULL
+	DROP TABLE dbo.composite_pk;
+
+CREATE TABLE composite_pk (
+	id1		int NOT NULL,
+	id2		int NOT NULL,
+	value	varchar(100) NOT NULL,
+	PRIMARY KEY (id1, id2)
+);

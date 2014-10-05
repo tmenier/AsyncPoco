@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PetaTest;
-using AsyncPoco;
 
 namespace AsyncPoco.Tests
 {
@@ -24,18 +23,20 @@ namespace AsyncPoco.Tests
 		Database db;
 
 		[TestFixtureSetUp]
-		public Task CreateDbAsync()
+		public async Task CreateDbAsync()
 		{
 			db = new Database(_connectionStringName);
-			//await db.OpenSharedConnectionAsync();		// <-- Wow, this is crucial to getting SqlCE to perform.
-														// true, but it was causing AsyncPoco tests pass when they should have failed
-			return db.ExecuteAsync(Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName)));
+			var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName));
+			foreach(var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
+				await db.ExecuteAsync(sql);
 		}
 
 		[TestFixtureTearDown]
-		public Task DeleteDbAsync()
+		public async Task DeleteDbAsync()
 		{
-			return db.ExecuteAsync(Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName)));
+			var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName));
+			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
+				await db.ExecuteAsync(sql);
 		}
 
 		Task<long> GetRecordCountAsync()
@@ -889,6 +890,104 @@ namespace AsyncPoco.Tests
 			Assert.IsFalse(await db.ExistsAsync<deco>("id = @0", id+100));
 			Assert.IsFalse(await db.ExistsAsync<deco>(id + 100));
         }
-	}
 
+		[Test]
+		public async Task UpdateByObjectCompositePK() {
+			await db.ExecuteAsync("DELETE FROM composite_pk");
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+			await db.UpdateAsync("composite_pk", "id1,id2", new composite_pk { id1 = 2, id2 = 1, value = "buzz" });
+
+			var rows = await db.FetchAsync<composite_pk>("SELECT * FROM composite_pk WHERE value = 'buzz'");
+			Assert.AreEqual(1, rows.Count);
+			Assert.AreEqual(2, rows[0].id1);
+			Assert.AreEqual(1, rows[0].id2);
+		}
+
+		[Test]
+		public async Task UpdateByKeyCompositePK() {
+			await db.ExecuteAsync("DELETE FROM composite_pk");
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+			await db.UpdateAsync("composite_pk", "id1,id2", new { value = "buzz" }, new { id1 = 2, id2 = 1 });
+
+			var rows = await db.FetchAsync<composite_pk>("SELECT * FROM composite_pk WHERE value = 'buzz'");
+			Assert.AreEqual(1, rows.Count);
+			Assert.AreEqual(2, rows[0].id1);
+			Assert.AreEqual(1, rows[0].id2);
+		}
+
+		[Test]
+		public async Task UpdateByColumnsCompositePK() {
+			await db.ExecuteAsync("DELETE FROM composite_pk");
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+			await db.UpdateAsync("composite_pk", "id1,id2", new { value = "buzz" }, new { id1 = 2, id2 = 1 }, new[] { "value" });
+
+			var rows = await db.FetchAsync<composite_pk>("SELECT * FROM composite_pk WHERE value = 'buzz'");
+			Assert.AreEqual(1, rows.Count);
+			Assert.AreEqual(2, rows[0].id1);
+			Assert.AreEqual(1, rows[0].id2);
+		}
+
+		[Test]
+		public async Task DeleteByObjectCompositePK() {
+			await db.ExecuteAsync("DELETE FROM composite_pk");
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 1, value = "buzz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+			await db.DeleteAsync("composite_pk", "id1,id2", new composite_pk { id1 = 2, id2 = 1 });
+
+			var rows = await db.FetchAsync<composite_pk>("SELECT * FROM composite_pk");
+			Assert.AreEqual(3, rows.Count);
+			Assert.IsTrue(rows.All(x => x.value == "fizz"));
+		}
+
+		[Test]
+		public async Task DeleteByKeyCompositePK() {
+			await db.ExecuteAsync("DELETE FROM composite_pk");
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 1, value = "buzz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+			await db.DeleteAsync("composite_pk", "id1,id2", null, new { id1 = 2, id2 = 1 });
+
+			var rows = await db.FetchAsync<composite_pk>("SELECT * FROM composite_pk");
+			Assert.AreEqual(3, rows.Count);
+			Assert.IsTrue(rows.All(x => x.value == "fizz"));
+		}
+
+		[Test]
+		public async Task ExistsCompositePK() {
+			await db.ExecuteAsync("DELETE FROM composite_pk");
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+			Assert.IsTrue(await db.ExistsAsync<composite_pk>(new { id1 = 1, id2 = 2 }));
+			Assert.IsFalse(await db.ExistsAsync<composite_pk>(new { id1 = 2, id2 = 1 }));
+		}
+
+		[Test]
+		public async Task SingleCompositePK() {
+			await db.ExecuteAsync("DELETE FROM composite_pk");
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
+			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+			Assert.IsNotNull(await db.SingleAsync<composite_pk>(new { id1 = 1, id2 = 2 }));
+		}
+	}
 }

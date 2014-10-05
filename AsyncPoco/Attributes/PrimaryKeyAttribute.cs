@@ -16,7 +16,7 @@ namespace AsyncPoco
 		public PrimaryKeyAttribute(string primaryKey)
 		{
 			Value = primaryKey;
-			autoIncrement = true;
+			autoIncrement = !primaryKey.Contains(",");
 		}
 
 		public string Value 

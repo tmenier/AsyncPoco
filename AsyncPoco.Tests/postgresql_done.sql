@@ -1,3 +1,3 @@
 ﻿DROP TABLE IF EXISTS petapoco;
 DROP TABLE IF EXISTS petapoco2;
-
+DROP TABLE IF EXISTS composite_pk;

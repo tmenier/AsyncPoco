@@ -1015,9 +1015,10 @@ namespace AsyncPoco
 		/// <typeparam name="T">The Type representing the table being queried</typeparam>
 		/// <param name="primaryKey">The primary key value to look for</param>
 		/// <returns>True if a record with the specified primary key value exists.</returns>
-		public Task<bool> ExistsAsync<T>(object primaryKey)
-		{
-			return ExistsAsync<T>(string.Format("{0}=@0", _dbType.EscapeSqlIdentifier(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey)), primaryKey);
+		public Task<bool> ExistsAsync<T>(object primaryKey) {
+			var index = 0;
+			var pk = GetPrimaryKeyValues(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey, primaryKey);
+			return ExistsAsync<T>(BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
 		}
 
 		#endregion
@@ -1035,7 +1036,9 @@ namespace AsyncPoco
 		/// </remarks>
 		public Task<T> SingleAsync<T>(object primaryKey) 
 		{
-			return SingleAsync<T>(string.Format("WHERE {0}=@0", _dbType.EscapeSqlIdentifier(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey)), primaryKey);
+			var index = 0;
+			var pk = GetPrimaryKeyValues(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey, primaryKey);
+			return SingleAsync<T>("WHERE " + BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
 		}
 
 		/// <summary>
@@ -1049,7 +1052,9 @@ namespace AsyncPoco
 		/// </remarks>
 		public Task<T> SingleOrDefaultAsync<T>(object primaryKey) 
 		{
-			return SingleOrDefaultAsync<T>(string.Format("WHERE {0}=@0", _dbType.EscapeSqlIdentifier(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey)), primaryKey);
+			var index = 0;
+			var pk = GetPrimaryKeyValues(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey, primaryKey);
+			return SingleOrDefaultAsync<T>("WHERE " + BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
 		}
 
 		/// <summary>
@@ -1355,20 +1360,22 @@ namespace AsyncPoco
 				await OpenSharedConnectionAsync();
 				try
 				{
+					// update
 					using (var cmd = CreateCommand(_sharedConnection, ""))
 					{
 						var sb = new StringBuilder();
 						var index = 0;
 						var pd = PocoData.ForObject(poco,primaryKeyName);
+						var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, primaryKeyValue);
+
 						if (columns == null)
 						{
 							foreach (var i in pd.Columns)
 							{
 								// Don't update the primary key, but grab the value if we don't have it
-								if (string.Compare(i.Key, primaryKeyName, true) == 0)
+								if (primaryKeyValue == null && primaryKeyValuePairs.ContainsKey(i.Key))
 								{
-									if (primaryKeyValue == null)
-										primaryKeyValue = i.Value.GetValue(poco);
+									primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
 									continue;
 								}
 
@@ -1399,26 +1406,17 @@ namespace AsyncPoco
 								// Store the parameter in the command
 								AddParam(cmd, pc.GetValue(poco), pc.PropertyInfo);
 							}
-
-							// Grab primary key value
-							if (primaryKeyValue == null)
-							{
-								var pc = pd.Columns[primaryKeyName];
-								primaryKeyValue = pc.GetValue(poco);
-							}
-
 						}
 
-						// Find the property info for the primary key
-						PropertyInfo pkpi=null;
-						if (primaryKeyName != null)
-						{
-							pkpi = pd.Columns[primaryKeyName].PropertyInfo;
-						}
+						cmd.CommandText = string.Format("UPDATE {0} SET {1} WHERE {2}",
+							_dbType.EscapeTableName(tableName), 
+							sb, 
+							BuildPrimaryKeySql(primaryKeyValuePairs, ref index));
 
-						cmd.CommandText = string.Format("UPDATE {0} SET {1} WHERE {2} = {3}{4}",
-											_dbType.EscapeTableName(tableName), sb.ToString(), _dbType.EscapeSqlIdentifier(primaryKeyName), _paramPrefix, index++);
-						AddParam(cmd, primaryKeyValue, pkpi);
+						foreach (var keyValue in primaryKeyValuePairs) {
+							var pi = pd.Columns.ContainsKey(keyValue.Key) ? pd.Columns[keyValue.Key].PropertyInfo : null;
+							AddParam(cmd, keyValue.Value, pi);
+						}
 
 						DoPreExecute(cmd);
 
@@ -1561,20 +1559,22 @@ namespace AsyncPoco
 		/// <returns>The number of rows affected</returns>
 		public Task<int> DeleteAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue)
 		{
-			// If primary key value not specified, pick it up from the object
-			if (primaryKeyValue == null)
-			{
-				var pd = PocoData.ForObject(poco,primaryKeyName);
-				PocoColumn pc;
-				if (pd.Columns.TryGetValue(primaryKeyName, out pc))
-				{
-					primaryKeyValue = pc.GetValue(poco);
+			var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, primaryKeyValue);
+
+			if (poco != null) {
+				// If primary key value not specified, pick it up from the object
+				var pd = PocoData.ForObject(poco, primaryKeyName);
+				foreach (var i in pd.Columns) {
+					if (primaryKeyValue == null && primaryKeyValuePairs.ContainsKey(i.Key)) {
+						primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
+					}
 				}
 			}
 
 			// Do it
-			var sql = string.Format("DELETE FROM {0} WHERE {1}=@0", _dbType.EscapeTableName(tableName), _dbType.EscapeSqlIdentifier(primaryKeyName));
-			return ExecuteAsync(sql, primaryKeyValue);
+			var index = 0;
+			var sql = string.Format("DELETE FROM {0} WHERE {1}", tableName, BuildPrimaryKeySql(primaryKeyValuePairs, ref index));
+			return ExecuteAsync(sql, primaryKeyValuePairs.Select(x => x.Value).ToArray());
 		}
 
 		/// <summary>
@@ -2256,6 +2256,34 @@ namespace AsyncPoco
 		}
 
 		#endregion
+
+		#region Composite primary key support
+		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue) {
+			Dictionary<string, object> primaryKeyValues;
+
+			var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
+			if (primaryKeyValue != null) {
+				if (multiplePrimaryKeysNames.Length == 1) {
+					primaryKeyValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { primaryKeyName, primaryKeyValue } };
+				}
+				else {
+					var dict = primaryKeyValue as Dictionary<string, object>;
+					primaryKeyValues = dict ?? multiplePrimaryKeysNames.ToDictionary(x => x, x => primaryKeyValue.GetType().GetProperties().Single(y => string.Equals(x, y.Name, StringComparison.OrdinalIgnoreCase)).GetValue(primaryKeyValue, null), StringComparer.OrdinalIgnoreCase);
+				}
+			}
+			else {
+				primaryKeyValues = multiplePrimaryKeysNames.ToDictionary(x => x, x => (object)null, StringComparer.OrdinalIgnoreCase);
+			}
+
+			return primaryKeyValues;
+		}
+
+		private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
+			var tempIndex = index;
+			index += primaryKeyValuePair.Count;
+			return string.Join(" AND ", primaryKeyValuePair.Select((x, i) => x.Value == null || x.Value == DBNull.Value ? string.Format("{0} IS NULL", _dbType.EscapeSqlIdentifier(x.Key)) : string.Format("{0} = @{1}", _dbType.EscapeSqlIdentifier(x.Key), tempIndex + i)).ToArray());
+		}
+		#endregion
 	}
 
 
@@ -2432,7 +2460,7 @@ namespace AsyncPoco
 		public PrimaryKeyAttribute(string primaryKey)
 		{
 			Value = primaryKey;
-			autoIncrement = true;
+			autoIncrement = !primaryKey.Contains(",");
 		}
 
 		public string Value 
@@ -4299,7 +4327,7 @@ namespace AsyncPoco
 
 			public override async Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 			{
-				if (PrimaryKeyName != null)
+				if (PrimaryKeyName != null && !PrimaryKeyName.Contains(","))
 				{
 					cmd.CommandText += string.Format("returning {0} as NewID", EscapeSqlIdentifier(PrimaryKeyName));
 					return await db.ExecuteScalarHelperAsync(cmd);

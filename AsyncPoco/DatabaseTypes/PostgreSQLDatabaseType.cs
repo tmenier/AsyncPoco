@@ -27,7 +27,7 @@ namespace AsyncPoco.DatabaseTypes
 
 		public override async Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
-			if (PrimaryKeyName != null)
+			if (PrimaryKeyName != null && !PrimaryKeyName.Contains(","))
 			{
 				cmd.CommandText += string.Format("returning {0} as NewID", EscapeSqlIdentifier(PrimaryKeyName));
 				return await db.ExecuteScalarHelperAsync(cmd);
