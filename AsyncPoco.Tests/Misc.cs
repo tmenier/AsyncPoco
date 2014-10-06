@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using AsyncPoco.Internal;
 using PetaTest;
 
 namespace AsyncPoco.Tests
@@ -41,13 +42,17 @@ namespace AsyncPoco.Tests
 		[Test]
 		public void EnumMapper()
 		{
-			Assert.AreEqual(Fruits.Apples, AsyncPoco.Internal.EnumMapper.EnumFromString(typeof(Fruits), "Apples"));
-			Assert.AreEqual(Fruits.Pears, AsyncPoco.Internal.EnumMapper.EnumFromString(typeof(Fruits), "pears"));
-			Assert.AreEqual(Fruits.Bananas, AsyncPoco.Internal.EnumMapper.EnumFromString(typeof(Fruits), "BANANAS"));
+			Assert.AreEqual(Fruits.Apples, Internal.EnumMapper.EnumFromString(typeof(Fruits), "Apples"));
+			Assert.AreEqual(Fruits.Pears, Internal.EnumMapper.EnumFromString(typeof(Fruits), "pears"));
+			Assert.AreEqual(Fruits.Bananas, Internal.EnumMapper.EnumFromString(typeof(Fruits), "BANANAS"));
+			Assert.AreEqual(Fruits2.Oranges, Internal.EnumMapper.EnumFromString(typeof(Fruits2), "Oranges"));
 
-			Assert.AreEqual(Fruits2.Oranges, AsyncPoco.Internal.EnumMapper.EnumFromString(typeof(Fruits2), "Oranges"));
+			// nullable enums
+			Assert.AreEqual(Fruits.Apples, Internal.EnumMapper.EnumFromString(typeof(Fruits?), "Apples"));
+			Assert.AreEqual(null, Internal.EnumMapper.EnumFromString(typeof(Fruits?), null));
 
-			Assert.Throws(typeof(Exception), () => AsyncPoco.Internal.EnumMapper.EnumFromString(typeof(Fruits2), "Apples"));
+
+			Assert.Throws(typeof(Exception), () => Internal.EnumMapper.EnumFromString(typeof(Fruits2), "Apples"));
 		}
 	}
 }

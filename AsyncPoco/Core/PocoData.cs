@@ -91,6 +91,14 @@ namespace AsyncPoco.Internal
 			return tc >= TypeCode.SByte && tc <= TypeCode.UInt64;
 		}
 
+		// true for enumns and nullable enums
+		static bool IsEnumType(Type t)
+		{
+			if (t.IsEnum) return true;
+			var underlying = Nullable.GetUnderlyingType(t);
+			return underlying != null && underlying.IsEnum;
+		}
+
 		// Create factory function that can convert a IDataReader record into a POCO
 		public Delegate GetFactory(string sql, string connString, int firstColumn, int countColumns, IDataReader r)
 		{
@@ -317,26 +325,40 @@ namespace AsyncPoco.Internal
 			// Standard DateTime->Utc mapper
 			if (pc!=null && pc.ForceToUtc && srcType == typeof(DateTime) && (dstType == typeof(DateTime) || dstType == typeof(DateTime?)))
 			{
-				return delegate(object src) { return new DateTime(((DateTime)src).Ticks, DateTimeKind.Utc); };
+				return src => new DateTime(((DateTime)src).Ticks, DateTimeKind.Utc);
 			}
 
 			// Forced type conversion including integral types -> enum
-			if (dstType.IsEnum && IsIntegralType(srcType))
+			if (IsEnumType(dstType) && IsIntegralType(srcType)) 
 			{
-				if (srcType != typeof(int))
+				var fromInt = (srcType == typeof(int));
+				var toNullable = !dstType.IsEnum;
+
+				if (fromInt && toNullable) 
 				{
-					return delegate(object src) { return Convert.ChangeType(src, typeof(int), null); };
+					return src => EnumMapper.EnumFromNullableInt(dstType, (int?)src);
+				}
+				else if (toNullable) 
+				{
+					return src => {
+						var i = Convert.ChangeType(src, typeof(int), null);
+						return EnumMapper.EnumFromNullableInt(dstType, i as int?);
+					};
+				}
+				else if (!fromInt) 
+				{
+					return src => Convert.ChangeType(src, typeof(int), null);
 				}
 			}
 			else if (!dstType.IsAssignableFrom(srcType))
 			{
-				if (dstType.IsEnum && srcType == typeof(string))
+				if (IsEnumType(dstType) && srcType == typeof(string))
 				{
-					return delegate(object src) { return EnumMapper.EnumFromString(dstType, (string)src); };
+					return src => EnumMapper.EnumFromString(dstType, (string)src);
 				}
 				else
 				{
-					return delegate(object src) { return Convert.ChangeType(src, dstType, null); };
+					return src => Convert.ChangeType(src, dstType, null);
 				}
 			}
 

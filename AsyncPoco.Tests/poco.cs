@@ -24,7 +24,9 @@ namespace AsyncPoco.Tests
 		public DateTime? date_edited { get; set; }
 		public string content { get; set; }
 		public State state { get; set; }
-		[Column("col w space")] public int col_w_space { get; set; }
+		public State? state2 { get; set; }
+		[Column("col w space")]
+		public int col_w_space { get; set; }
 		public float? nullreal { get; set; }
 	}
 
@@ -42,7 +44,9 @@ namespace AsyncPoco.Tests
 		[Column(ForceToUtc = true)]	public DateTime? date_edited { get; set; }
 		[Column] public string content { get; set; }
 		[Column] public State state { get; set; }
-		[Column("col w space")] public int col_w_space { get; set; }
+		[Column] public State? state2 { get; set; }
+		[Column("col w space")]
+		public int col_w_space { get; set; }
 		[Column] public float? nullreal { get; set; }
 	}
 	// Attributed not-so-true poco
@@ -55,7 +59,8 @@ namespace AsyncPoco.Tests
 		[Column]public string title { get; set; }
 		[Column]public bool draft { get; set; }
 		[Column]public DateTime date_created { get; set; }
-		[Column]public State state { get; set; }
+		[Column] public State state { get; set; }
+		[Column] public State? state2 { get; set; }
 		public string content { get; set; }
 		[Column("col w space")]public int col_w_space { get; set; }
 		[Column] public float? nullreal { get; set; }

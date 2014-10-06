@@ -9,6 +9,7 @@ CREATE TABLE petapoco (
 	date_edited		timestamp NULL,
 	content			text NOT NULL,
 	state			int NOT NULL,
+	state2			int NULL,
 	"col w space"   int,
 	nullreal		real NULL,
 

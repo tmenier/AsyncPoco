@@ -69,6 +69,7 @@ namespace AsyncPoco.Tests
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = State.Yes;
+			o.state2 = null;
 			o.col_w_space = 23;
 			o.nullreal = 24;
 
@@ -89,6 +90,7 @@ namespace AsyncPoco.Tests
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = State.Maybe;
+			o.state2 = State.No;
 			o.col_w_space = 23;
 			o.nullreal = 24;
 
@@ -104,6 +106,7 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(a.date_created, b.date_created);
 			Assert.AreEqual(a.date_edited, b.date_edited);
 			Assert.AreEqual(a.state, b.state);
+			Assert.AreEqual(a.state2, b.state2);
 			Assert.AreEqual(a.col_w_space, b.col_w_space);
 			Assert.AreEqual(a.nullreal, b.nullreal);
 		}
@@ -116,6 +119,7 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(a.content, b.content);
 			Assert.AreEqual(a.date_created, b.date_created);
 			Assert.AreEqual(a.state, b.state);
+			Assert.AreEqual(a.state2, b.state2);
 			Assert.AreEqual(a.col_w_space, b.col_w_space);
 			Assert.AreEqual(a.nullreal, b.nullreal);
 		}
@@ -797,6 +801,7 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(a.content, b.content);
 			Assert.AreEqual(a.date_created, b.date_created);
 			Assert.AreEqual(a.state, b.state);
+			Assert.AreEqual(a.state2, b.state2);
 		}
 
 		dynamic CreateExpando()
@@ -813,6 +818,7 @@ namespace AsyncPoco.Tests
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = (int)State.Maybe;
+			o.state2 = (int?)null;
 
 			return o;
 		}
