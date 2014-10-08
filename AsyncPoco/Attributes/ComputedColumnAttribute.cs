@@ -8,18 +8,17 @@ namespace AsyncPoco
 {
 
 	/// <summary>
-	/// Marks a poco property as a result only column that is populated in queries
-	/// when explicitly named
+	/// Marks a poco property as a computed column that is populated in queries
 	/// but not used for updates or inserts.
 	/// </summary>
 	[AttributeUsage(AttributeTargets.Property)]
-	public class ResultColumnAttribute : ColumnAttribute
+	public class ComputedColumnAttribute : ColumnAttribute
 	{
-		public ResultColumnAttribute()
+		public ComputedColumnAttribute()
 		{
 		}
 
-		public ResultColumnAttribute(string name)
+		public ComputedColumnAttribute(string name)
 			: base(name)
 		{
 		}
