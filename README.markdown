@@ -66,7 +66,7 @@ If you're not on .NET 4.5 or one of the supported database platforms, you're out
 
 ## Besides async, are there any other functional differences between PetaPoco and AsyncPoco?
 
-As of version 1.1, I've begun implementing a few features not found in PetaPoco, including support for nullable enums, composite primary keys (Ported from [NPoco](https://github.com/schotime/NPoco/wiki/Composite-Primary-Keys), and the `[ComputedColumn]` attribute.
+As of version 1.1, I've begun implementing a few features not found in PetaPoco, including support for nullable enums, composite primary keys (Ported from [NPoco](https://github.com/schotime/NPoco/wiki/Composite-Primary-Keys)), and the `[ComputedColumn]` marker attribute.
 
 ## Is it faster than PetaPoco?
 
