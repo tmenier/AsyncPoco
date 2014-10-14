@@ -70,7 +70,7 @@ As of version 1.1, I've begun implementing a few features not found in PetaPoco,
 
 ## Is it faster than PetaPoco?
 
-No. But that's not the point of asynchronous code. The point is to free up threads while waiting on I/O-bound work to complete, making desktop and mobile apps more responsive and web applications more scalable. The context switching magic wired up by the compiler when async/await are used actually adds a small amount of overhead to the running code. I have done some informal benchmarking and saw no significant performance differences between PetaPoco and AsyncPoco.
+No. But that's not the point of asynchronous code. The point is to free up threads while waiting on I/O-bound work to complete, making desktop and mobile apps more responsive and web applications more scalable. The context switching magic wired up by the compiler when async/await are used actually adds a small amount of overhead to the running code, though I've done some informal benchmarking and saw no significant performance differences between PetaPoco and AsyncPoco. I'd be happy to publish links to independent benchmarks if any exist.
 
 ## Where do I get it?
 
