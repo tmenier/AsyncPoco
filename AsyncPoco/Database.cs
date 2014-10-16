@@ -21,6 +21,7 @@ using System.Data.Common;
 using System.Data;
 using System.Text.RegularExpressions;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using AsyncPoco.Internal;
 
@@ -159,11 +160,18 @@ namespace AsyncPoco
 		/// </remarks>
 		public async Task OpenSharedConnectionAsync()
 		{
+			// Only 1 thread can access the function or functions that use this lock, others trying to access - will wait until the first one released.
+			await _syncLock.WaitAsync();
+
 			if (_sharedConnectionDepth == 0)
 			{
 				_sharedConnection = _factory.CreateConnection();
+				if (_sharedConnection == null)
+				{
+					throw new NullReferenceException("Connection reference not set to an instance of an object.");
+				}
 				_sharedConnection.ConnectionString = _connectionString;
-
+				
 				if (_sharedConnection.State == ConnectionState.Broken)
 					_sharedConnection.Close();
 
@@ -176,6 +184,9 @@ namespace AsyncPoco
 					_sharedConnectionDepth++;		// Make sure you call Dispose
 			}
 			_sharedConnectionDepth++;
+
+			// Release
+			_syncLock.Release(); 
 		}
 
 		/// <summary>
@@ -2216,6 +2227,7 @@ namespace AsyncPoco
 		string _lastSql;
 		object[] _lastArgs;
 		string _paramPrefix;
+		readonly SemaphoreSlim _syncLock = new SemaphoreSlim(1);
 		#endregion
 
 		#region Internal operations
