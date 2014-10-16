@@ -161,7 +161,7 @@ namespace AsyncPoco
 		public async Task OpenSharedConnectionAsync()
 		{
 			// Only 1 thread can access the function or functions that use this lock, others trying to access - will wait until the first one released.
-			await _syncLock.WaitAsync();
+			await _connectionSyncLock.WaitAsync();
 
 			if (_sharedConnectionDepth == 0)
 			{
@@ -171,7 +171,7 @@ namespace AsyncPoco
 					throw new NullReferenceException("Connection reference not set to an instance of an object.");
 				}
 				_sharedConnection.ConnectionString = _connectionString;
-				
+
 				if (_sharedConnection.State == ConnectionState.Broken)
 					_sharedConnection.Close();
 
@@ -186,7 +186,7 @@ namespace AsyncPoco
 			_sharedConnectionDepth++;
 
 			// Release
-			_syncLock.Release(); 
+			_connectionSyncLock.Release(); 
 		}
 
 		/// <summary>
@@ -265,6 +265,9 @@ namespace AsyncPoco
 		/// </summary>
 		public async Task BeginTransactionAsync()
 		{
+			// Only 1 thread can access the function or functions that use this lock, others trying to access - will wait until the first one released.
+			await _transactionSyncLock.WaitAsync();
+
 			_transactionDepth++;
 
 			if (_transactionDepth == 1)
@@ -275,6 +278,8 @@ namespace AsyncPoco
 				OnBeginTransaction();
 			}
 
+			// Release
+			_transactionSyncLock.Release(); 
 		}
 
 		/// <summary>
@@ -2227,7 +2232,8 @@ namespace AsyncPoco
 		string _lastSql;
 		object[] _lastArgs;
 		string _paramPrefix;
-		readonly SemaphoreSlim _syncLock = new SemaphoreSlim(1);
+		readonly SemaphoreSlim _connectionSyncLock = new SemaphoreSlim(1);
+		readonly SemaphoreSlim _transactionSyncLock = new SemaphoreSlim(1);
 		#endregion
 
 		#region Internal operations
