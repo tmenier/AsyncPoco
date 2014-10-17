@@ -265,9 +265,6 @@ namespace AsyncPoco
 		/// </summary>
 		public async Task BeginTransactionAsync()
 		{
-			// Only 1 thread can access the function or functions that use this lock, others trying to access - will wait until the first one released.
-			await _transactionSyncLock.WaitAsync();
-
 			_transactionDepth++;
 
 			if (_transactionDepth == 1)
@@ -277,9 +274,6 @@ namespace AsyncPoco
 				_transactionCancelled = false;
 				OnBeginTransaction();
 			}
-
-			// Release
-			_transactionSyncLock.Release(); 
 		}
 
 		/// <summary>
@@ -2233,7 +2227,6 @@ namespace AsyncPoco
 		object[] _lastArgs;
 		string _paramPrefix;
 		readonly SemaphoreSlim _connectionSyncLock = new SemaphoreSlim(1);
-		readonly SemaphoreSlim _transactionSyncLock = new SemaphoreSlim(1);
 		#endregion
 
 		#region Internal operations
