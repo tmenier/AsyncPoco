@@ -21,6 +21,7 @@ namespace AsyncPoco.DatabaseTypes
 		public override void PreExecute(IDbCommand cmd)
 		{
 			cmd.GetType().GetProperty("BindByName").SetValue(cmd, true, null);
+            cmd.GetType().GetProperty("InitialLONGFetchSize").SetValue(cmd, -1); //see http://docs.oracle.com/html/A96160_01/features.htm#1048395
 		}
 
 		public override string BuildPageQuery(long skip, long take, PagingHelper.SQLParts parts, ref object[] args)
