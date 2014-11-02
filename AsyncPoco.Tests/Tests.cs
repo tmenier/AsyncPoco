@@ -146,8 +146,7 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public async Task poco_Crud()
-		{
+		public async Task poco_Crud() {
 			// Create a random record
 			var o = CreatePoco();
 
@@ -994,6 +993,20 @@ namespace AsyncPoco.Tests
 			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
 
 			Assert.IsNotNull(await db.SingleAsync<composite_pk>(new { id1 = 1, id2 = 2 }));
+		}
+
+		[Test]
+		public async Task poco_Parallel() {
+			var pocos = new[] { CreatePoco(), CreatePoco(), CreatePoco(), CreatePoco(), CreatePoco(), CreatePoco(), CreatePoco(), CreatePoco() };
+
+			var pocos2 = await Task.WhenAll(pocos.Select(async p => {
+				await db.InsertAsync("petapoco", "id", p);
+				await Task.Delay(TimeSpan.FromMilliseconds(100));
+				return await db.SingleAsync<poco>("SELECT * FROM petapoco WHERE id=@0", p.id);
+			}));
+
+			for (var i = 0; i < pocos.Length; i++)
+				AssertPocos(pocos[i], pocos2[i]);
 		}
 	}
 }
