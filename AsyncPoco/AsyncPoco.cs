@@ -165,7 +165,7 @@ namespace AsyncPoco
 		/// <remarks>
 		/// Calls to Open/CloseSharedConnection are reference counted and should be balanced
 		/// </remarks>
-		public async Task OpenSharedConnectionAsync()
+		public virtual async Task OpenSharedConnectionAsync()
 		{
 			if (_sharedConnectionDepth == 0)
 			{
@@ -260,7 +260,7 @@ namespace AsyncPoco
 		/// <summary>
 		/// Starts a transaction scope, see GetTransaction() for recommended usage
 		/// </summary>
-		public async Task BeginTransactionAsync()
+		public virtual async Task BeginTransactionAsync()
 		{
 			_transactionDepth++;
 
@@ -277,7 +277,7 @@ namespace AsyncPoco
 		/// <summary>
 		/// Internal helper to cleanup transaction
 		/// </summary>
-		void CleanupTransaction()
+		protected virtual void CleanupTransaction()
 		{
 			OnEndTransaction();
 
@@ -509,7 +509,7 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL statement to execute</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>The number of rows affected</returns>
-		public async Task<int> ExecuteAsync(string sql, params object[] args)
+		public virtual async Task<int> ExecuteAsync(string sql, params object[] args)
 		{
 			try
 			{
@@ -557,7 +557,7 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to execute</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>The scalar value cast to T</returns>
-		public async Task<T> ExecuteScalarAsync<T>(string sql, params object[] args)
+		public virtual async Task<T> ExecuteScalarAsync<T>(string sql, params object[] args)
 		{
 			try
 			{
@@ -903,7 +903,7 @@ namespace AsyncPoco
 		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
 		/// returns the results as a List.
 		/// </remarks>
-		public async Task QueryAsync<T>(string sql, object[] args, Func<T, bool> func) 
+		public virtual async Task QueryAsync<T>(string sql, object[] args, Func<T, bool> func) 
 		{
 			if (EnableAutoSelect)
 				sql = AutoSelectHelper.AddSelectClause<T>(_dbType, sql);
@@ -1220,7 +1220,7 @@ namespace AsyncPoco
 		/// <remarks>Inserts a poco into a table.  If the poco has a property with the same name 
 		/// as the primary key the id of the new record is assigned to it.  Either way,
 		/// the new id is returned.</remarks>
-		public async Task<object> InsertAsync(string tableName, string primaryKeyName, bool autoIncrement, object poco)
+		public virtual async Task<object> InsertAsync(string tableName, string primaryKeyName, bool autoIncrement, object poco)
 		{
 			try
 			{
@@ -1357,7 +1357,7 @@ namespace AsyncPoco
 		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
 		/// <param name="columns">The column names of the columns to be updated, or null for all</param>
 		/// <returns>The number of affected rows</returns>
-		public async Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue, IEnumerable<string> columns)
+		public virtual async Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue, IEnumerable<string> columns)
 		{
 			try
 			{
@@ -1565,7 +1565,7 @@ namespace AsyncPoco
 		/// <param name="poco">The POCO object whose primary key value will be used to delete the row (or null to use the supplied primary key value)</param>
 		/// <param name="primaryKeyValue">The value of the primary key identifing the record to be deleted (or null, or get this value from the POCO instance)</param>
 		/// <returns>The number of rows affected</returns>
-		public Task<int> DeleteAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue)
+		public virtual Task<int> DeleteAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue)
 		{
 			var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, primaryKeyValue);
 
@@ -2042,7 +2042,7 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
-		public async Task QueryAsync<TRet>(Type[] types, object cb, string sql, object[] args, Action<TRet> action)
+		public virtual async Task QueryAsync<TRet>(Type[] types, object cb, string sql, object[] args, Action<TRet> action)
 		{
 			await OpenSharedConnectionAsync();
 			try

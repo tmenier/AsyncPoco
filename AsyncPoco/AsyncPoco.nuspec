@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2013/01/nuspec.xsd">
 	<metadata>
 		<id>AsyncPoco</id>
-		<version>1.1.1</version>
+		<version>1.1.2</version>
 		<title>AsyncPoco</title>
 		<authors>Todd Menier</authors>
 		<projectUrl>https://github.com/tmenier/AsyncPoco</projectUrl>
@@ -10,6 +10,7 @@
 		<requireLicenseAcceptance>true</requireLicenseAcceptance>
 		<description>A fully asynchronous fork of the popular PetaPoco micro-ORM, supporting data access using the TAP pattern and async/await keywords introduced in C# 5.0 and VB 11. All PetaPoco methods have been converted to their async equivalents (FetchAsync, InsertAsync, ExecuteAsync, etc.) where the underlying ADO.NET calls have async equivalents. Supports SQL Server, SQL Server CE, MySQL, and PostgreSQL.</description>
 		<releaseNotes>
+			1.1.2 - Allow further modifying query after .SQL is called (thanks @rupe120), virtual methods for better extensibility (thanks @qstarin)
 			1.1.1 - Better support for LONG and LONG RAW types in Oracle (thanks @pjlammertyn)
 			1.1.0 - Support for composite keys (thanks @schotime), nullable enums, and ComputedColumn attribute (thanks @JustinStolle)
 			1.0.1 - Fixed reported potential NullReferenceException in identifying DB platform

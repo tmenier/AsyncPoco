@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("AsyncPoco")]
-[assembly: AssemblyVersion("1.1.1.*")]
+[assembly: AssemblyVersion("1.1.2")]
 [assembly: AssemblyDescription("A fully asynchronous fork of the popular PetaPoco micro-ORM.")]
 [assembly: AssemblyCompany("Topten Software, Todd Menier")]
 [assembly: AssemblyProduct("AsyncPoco")]
