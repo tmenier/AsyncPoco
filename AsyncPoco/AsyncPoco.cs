@@ -3000,6 +3000,9 @@ namespace AsyncPoco
 		/// <returns>A reference to this builder, allowing for fluent style concatenation</returns>
 		public Sql Append(Sql sql)
 		{
+			// Ensure the sql is rebuilt if changed
+			_sqlFinal = null;
+
 			if (_rhs != null)
 				_rhs.Append(sql);
 			else
