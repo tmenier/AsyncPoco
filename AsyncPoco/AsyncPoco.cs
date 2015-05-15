@@ -1025,7 +1025,7 @@ namespace AsyncPoco
 		/// Checks for the existance of a row with primary keys in poco.
 		/// </summary>
 		/// <param name="poco">The poco to look for</param>
-		/// <returns>True if a record with the specified primary key value exists.</returns>
+		/// <returns>True if a record with the specified primary key value inside the poco exists.</returns>
 		public async Task<bool> ExistsAsync(object poco)
 		{
 			try
@@ -1041,23 +1041,13 @@ namespace AsyncPoco
 					var index = 0;
 					var pocoData = PocoData.ForObject(poco, primaryKeyName);
 					var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, null);
-
-					foreach (var i in pocoData.Columns)
-					{
-						if(primaryKeyValuePairs.ContainsKey(i.Key))
-							primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
-					}
+					addValuesToPrimaryKeyValuePairs(poco, pocoData, primaryKeyValuePairs);
 					var sqlCondition = BuildPrimaryKeySql(primaryKeyValuePairs, ref index);
 					var query = string.Format(_dbType.GetExistsSql(), tableName, sqlCondition);
-					writeToFile("before command creation");
-					using (var cmd = CreateCommand(_sharedConnection, query))
+					using (var cmd = CreateCommand(_sharedConnection, ""))
 					{
-						writeParametersToFile(cmd.Parameters);
-						foreach (var keyValue in primaryKeyValuePairs)
-						{
-							var pi = pocoData.Columns.ContainsKey(keyValue.Key) ? pocoData.Columns[keyValue.Key].PropertyInfo : null;
-							AddParam(cmd, keyValue.Value, pi);
-						}
+						cmd.CommandText = query;
+						addPrimaryKeyParameters(primaryKeyValuePairs, pocoData, cmd);
 						DoPreExecute(cmd);
 
 						// Do it
@@ -1084,6 +1074,24 @@ namespace AsyncPoco
 				if (OnException(x))
 					throw;
 				return default(int) != 0;
+			}
+		}
+
+		private void addValuesToPrimaryKeyValuePairs(object poco, PocoData pocoData, Dictionary<string, object> primaryKeyValuePairs)
+		{
+			foreach (var i in pocoData.Columns)
+			{
+				if (primaryKeyValuePairs.ContainsKey(i.Key))
+					primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
+			}
+		}
+
+		private void addPrimaryKeyParameters(Dictionary<string, object> primaryKeyValuePairs, PocoData pocoData, DbCommand cmd)
+		{
+			foreach (var keyValue in primaryKeyValuePairs)
+			{
+				var pi = pocoData.Columns.ContainsKey(keyValue.Key) ? pocoData.Columns[keyValue.Key].PropertyInfo : null;
+				AddParam(cmd, keyValue.Value, pi);
 			}
 		}
 

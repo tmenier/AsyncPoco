@@ -896,7 +896,7 @@ namespace AsyncPoco.Tests
         }
 
         [Test]
-        public async Task Exists_Poco_Query_Does()
+        public async Task Exists_Poco_Does()
         {
             var id = await InsertRecordsAsync(10);
             var poco = CreateDeco();
@@ -904,7 +904,7 @@ namespace AsyncPoco.Tests
             Assert.IsTrue(await db.ExistsAsync(poco));
         }
         [Test]
-        public async Task Exists_Poco_Query_DoesNot()
+        public async Task Exists_Poco_DoesNot()
         {
             var id = await InsertRecordsAsync(10);
             var poco = CreateDeco();
@@ -1000,6 +1000,20 @@ namespace AsyncPoco.Tests
 			Assert.IsTrue(await db.ExistsAsync<composite_pk>(new { id1 = 1, id2 = 2 }));
 			Assert.IsFalse(await db.ExistsAsync<composite_pk>(new { id1 = 2, id2 = 1 }));
 		}
+
+        [Test]
+        public async Task ExistsPocoCompositePK()
+        {
+            var existsCompositePoco = new composite_pk {id1 = 1, id2 = 2, value = "fizz"};
+            await db.ExecuteAsync("DELETE FROM composite_pk");
+            await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
+            await db.InsertAsync(existsCompositePoco);
+            await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
+
+            var doesNotExistCompositePoco = new composite_pk { id1 = 2, id2 = 1, value = "fizz" };
+            Assert.IsTrue(await db.ExistsAsync(existsCompositePoco));
+            Assert.IsFalse(await db.ExistsAsync(doesNotExistCompositePoco));
+        }
 
 		[Test]
 		public async Task SingleCompositePK() {
