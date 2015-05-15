@@ -1,16 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using PetaTest;
 
 namespace AsyncPoco.Tests
 {
-	[TestFixture("sqlserver")]
+	//[TestFixture("sqlserver")]
 	[TestFixture("sqlserverce")]
-	[TestFixture("mysql")]
-	[TestFixture("postgresql")]
+	//[TestFixture("mysql")]
+	//[TestFixture("postgresql")]
 	public class Tests
 	{
 		public Tests(string connectionStringName)
@@ -895,6 +893,23 @@ namespace AsyncPoco.Tests
             var id = await InsertRecordsAsync(10);
 			Assert.IsFalse(await db.ExistsAsync<deco>("id = @0", id+100));
 			Assert.IsFalse(await db.ExistsAsync<deco>(id + 100));
+        }
+
+        [Test]
+        public async Task Exists_Poco_Query_Does()
+        {
+            var id = await InsertRecordsAsync(10);
+            var poco = CreateDeco();
+            poco.id = id;
+            Assert.IsTrue(await db.ExistsAsync(poco));
+        }
+        [Test]
+        public async Task Exists_Poco_Query_DoesNot()
+        {
+            var id = await InsertRecordsAsync(10);
+            var poco = CreateDeco();
+            poco.id = id + 100;
+            Assert.IsFalse(await db.ExistsAsync(poco));
         }
 
 		[Test]

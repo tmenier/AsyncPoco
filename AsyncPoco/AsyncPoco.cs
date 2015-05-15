@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -1009,6 +1010,12 @@ namespace AsyncPoco
 			return result != 0;
 		}
 
+		private async Task<bool> ExistsAsync(string sqlCondition,  TableInfo pocoInfo, params object[] args)
+		{
+			var result = await ExecuteScalarAsync<int>(string.Format(_dbType.GetExistsSql(), pocoInfo.TableName, sqlCondition), args);
+			return result != 0;
+		}
+
 		/// <summary>
 		/// Checks for the existance of a row with the specified primary key value.
 		/// </summary>
@@ -1019,6 +1026,48 @@ namespace AsyncPoco
 			var index = 0;
 			var pk = GetPrimaryKeyValues(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey, primaryKey);
 			return ExistsAsync<T>(BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
+		}
+
+		/// <summary>
+		/// Checks for the existance of a row with primary keys in poco.
+		/// </summary>
+		/// <param name="poco">The poco to look for</param>
+		/// <returns>True if a record with the specified primary key value exists.</returns>
+		public Task<bool> ExistsAsync(object poco)
+		{
+			var pd = PocoData.ForType(poco.GetType());
+			var primaryKeyDictionary = createPrimaryKeyDictionary(poco);
+			writePrimaryKeyValuesToFile(primaryKeyDictionary);
+			var index = 0;
+			var pk = GetPrimaryKeyValues(pd.TableInfo.PrimaryKey, primaryKeyDictionary);
+			return ExistsAsync(BuildPrimaryKeySql(pk, ref index), pd.TableInfo, pk.Select(x => x.Value).ToArray());
+		}
+
+		private void writePrimaryKeyValuesToFile(Dictionary<string, object> primaryKeyDictionary)
+		{
+			var primaryKeys = new string[primaryKeyDictionary.Count];
+			int index = 0;
+			foreach (var primaryKey in primaryKeyDictionary)
+			{
+				primaryKeys[index++] = primaryKey.Key + "::" + primaryKey.Value;
+			}
+			System.IO.File.WriteAllLines(@".\WriteLines.txt", primaryKeys);
+		}
+
+		private Dictionary<string, object> createPrimaryKeyDictionary(object poco)
+		{
+			var pd = PocoData.ForType(poco.GetType());
+			var primarKeyNames = parsePrimaryKeyNames(pd.TableInfo.PrimaryKey);
+			var primaryKeyDictionary = new Dictionary<string, object>(); 
+			foreach (var column in pd.Columns)
+				if (columnIsPrimaryKey(column, primarKeyNames))
+					primaryKeyDictionary.Add(column.Key, column.Value.GetValue(poco));
+			return primaryKeyDictionary;
+		}
+
+		private bool columnIsPrimaryKey(KeyValuePair<string, PocoColumn> column, string[] primarKeyNames)
+		{
+			return primarKeyNames.ToList().Contains(column.Key);
 		}
 
 		#endregion
@@ -2269,7 +2318,7 @@ namespace AsyncPoco
 		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue) {
 			Dictionary<string, object> primaryKeyValues;
 
-			var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
+			var multiplePrimaryKeysNames = parsePrimaryKeyNames(primaryKeyName);
 			if (primaryKeyValue != null) {
 				if (multiplePrimaryKeysNames.Length == 1) {
 					primaryKeyValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { primaryKeyName, primaryKeyValue } };
@@ -2284,6 +2333,11 @@ namespace AsyncPoco
 			}
 
 			return primaryKeyValues;
+		}
+
+		private string[] parsePrimaryKeyNames(string primaryKeyName)
+		{
+			return primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
 		}
 
 		private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
