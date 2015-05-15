@@ -1,0 +1,23 @@
+﻿using System;
+using System.Runtime.Serialization;
+
+namespace AsyncPoco.Exceptions
+{
+    public class UninitializedPrimaryKeyException : SystemException
+    {
+        public UninitializedPrimaryKeyException()
+        {
+        }
+        public UninitializedPrimaryKeyException(string message) : base(message)
+        {
+        }
+        public UninitializedPrimaryKeyException(string message, Exception inner) : base(message, inner)
+        {
+        }
+
+        // This constructor is needed for serialization.
+        protected UninitializedPrimaryKeyException(SerializationInfo info, StreamingContext context)
+       {
+       }
+    }
+}

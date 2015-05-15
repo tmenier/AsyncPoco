@@ -22,6 +22,7 @@ using System.Data;
 using System.Text.RegularExpressions;
 using System.Reflection;
 using System.Threading.Tasks;
+using AsyncPoco.Exceptions;
 using AsyncPoco.Internal;
 
 
@@ -1029,9 +1030,11 @@ namespace AsyncPoco
 	                var type = poco.GetType();
                     var pocoDataForType = PocoData.ForType(type);
                     var primaryKeyName = pocoDataForType.TableInfo.PrimaryKey;
+                    var pocoData = PocoData.ForObject(poco, primaryKeyName);
+                        if(isAutoincrementAndDefaultKey(poco, pocoData))
+                            throw new UninitializedPrimaryKeyException("Primary key, " + primaryKeyName + ", is not initialized to an incremental value.");
 	                var tableName = pocoDataForType.TableInfo.TableName;
                     var index = 0;
-                    var pocoData = PocoData.ForObject(poco, primaryKeyName);
                     var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, null);
                     addValuesToPrimaryKeyValuePairs(poco, pocoData, primaryKeyValuePairs);
                     var sqlCondition = BuildPrimaryKeySql(primaryKeyValuePairs, ref index);
@@ -1046,13 +1049,12 @@ namespace AsyncPoco
                         object val = await cmd.ExecuteScalarAsync();
                         OnExecutedCommand(cmd);
 
-                        var integerVal = 0;
                         // Handle nullable types
                         Type u = Nullable.GetUnderlyingType(typeof(int));
                         if (u != null && val == null)
-                            integerVal = default(int);
+                            return default(int) != 0;
 
-                        integerVal = (int)Convert.ChangeType(val, u ?? typeof(int));
+                        var integerVal = (int)Convert.ChangeType(val, u ?? typeof(int));
                         return integerVal != 0;
                     }
                 }
@@ -1068,6 +1070,13 @@ namespace AsyncPoco
                 return default(int) != 0;
             }
         }
+
+	    private bool isAutoincrementAndDefaultKey(object poco, PocoData pocoData)
+	    {
+	        bool isAutoincrement = pocoData.TableInfo.AutoIncrement;
+	        string primaryKeyName = pocoData.TableInfo.PrimaryKey;
+	        return isAutoincrement && Convert.ToInt32(pocoData.Columns[primaryKeyName].GetValue(poco)) == 0;
+	    }
 
 	    private void addValuesToPrimaryKeyValuePairs(object poco, PocoData pocoData, Dictionary<string, object> primaryKeyValuePairs)
 	    {
@@ -1086,22 +1095,6 @@ namespace AsyncPoco
 	            AddParam(cmd, keyValue.Value, pi);
 	        }
 	    }
-
-	    private void writeParametersToFile(DbParameterCollection cmdParameters)
-        {
-            var parameters = new string[cmdParameters.Count];
-            int index = 0;
-            foreach (IDbDataParameter parameter in cmdParameters)
-            {
-                parameters[index++] = parameter.ParameterName + "::" + parameter.Value;
-            }
-            System.IO.File.WriteAllLines(@".\WriteLines.txt", parameters);
-        }
-
-        private void writeToFile(string debugoutput)
-        {
-            System.IO.File.WriteAllLines(@".\WriteLines.txt", new []{debugoutput});
-        }
 
 		#endregion
 
@@ -2351,7 +2344,7 @@ namespace AsyncPoco
 		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue) {
 			Dictionary<string, object> primaryKeyValues;
 
-			var multiplePrimaryKeysNames = parsePrimaryKeyNames(primaryKeyName);
+            var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
 			if (primaryKeyValue != null) {
 				if (multiplePrimaryKeysNames.Length == 1) {
 					primaryKeyValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { primaryKeyName, primaryKeyValue } };
@@ -2367,11 +2360,6 @@ namespace AsyncPoco
 
 			return primaryKeyValues;
 		}
-
-	    private string[] parsePrimaryKeyNames(string primaryKeyName)
-	    {
-	        return primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
-	    }
 
 	    private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
 			var tempIndex = index;

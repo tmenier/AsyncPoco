@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using AsyncPoco.Exceptions;
 using PetaTest;
 
 namespace AsyncPoco.Tests
@@ -903,6 +904,7 @@ namespace AsyncPoco.Tests
             poco.id = id;
             Assert.IsTrue(await db.ExistsAsync(poco));
         }
+
         [Test]
         public async Task Exists_Poco_DoesNot()
         {
@@ -910,6 +912,16 @@ namespace AsyncPoco.Tests
             var poco = CreateDeco();
             poco.id = id + 100;
             Assert.IsFalse(await db.ExistsAsync(poco));
+        }
+
+        [Test]
+        public Task Exists_Poco_Unsure()
+        {
+            var poco = CreateDeco();
+            return Assert.ThrowsAsync<UninitializedPrimaryKeyException>(async () =>
+            {
+                await db.ExistsAsync(poco);
+            });
         }
 
 		[Test]
