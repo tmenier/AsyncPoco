@@ -24,7 +24,6 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.Common;
-using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -1010,12 +1009,6 @@ namespace AsyncPoco
 			return result != 0;
 		}
 
-		private async Task<bool> ExistsAsync(string sqlCondition,  TableInfo pocoInfo, params object[] args)
-		{
-			var result = await ExecuteScalarAsync<int>(string.Format(_dbType.GetExistsSql(), pocoInfo.TableName, sqlCondition), args);
-			return result != 0;
-		}
-
 		/// <summary>
 		/// Checks for the existance of a row with the specified primary key value.
 		/// </summary>
@@ -1033,41 +1026,81 @@ namespace AsyncPoco
 		/// </summary>
 		/// <param name="poco">The poco to look for</param>
 		/// <returns>True if a record with the specified primary key value exists.</returns>
-		public Task<bool> ExistsAsync(object poco)
+		public async Task<bool> ExistsAsync(object poco)
 		{
-			var pd = PocoData.ForType(poco.GetType());
-			var primaryKeyDictionary = createPrimaryKeyDictionary(poco);
-			writePrimaryKeyValuesToFile(primaryKeyDictionary);
-			var index = 0;
-			var pk = GetPrimaryKeyValues(pd.TableInfo.PrimaryKey, primaryKeyDictionary);
-			return ExistsAsync(BuildPrimaryKeySql(pk, ref index), pd.TableInfo, pk.Select(x => x.Value).ToArray());
-		}
-
-		private void writePrimaryKeyValuesToFile(Dictionary<string, object> primaryKeyDictionary)
-		{
-			var primaryKeys = new string[primaryKeyDictionary.Count];
-			int index = 0;
-			foreach (var primaryKey in primaryKeyDictionary)
+			try
 			{
-				primaryKeys[index++] = primaryKey.Key + "::" + primaryKey.Value;
+				await OpenSharedConnectionAsync();
+				try
+				{
+					// exists
+					var type = poco.GetType();
+					var pocoDataForType = PocoData.ForType(type);
+					var primaryKeyName = pocoDataForType.TableInfo.PrimaryKey;
+					var tableName = pocoDataForType.TableInfo.TableName;
+					var index = 0;
+					var pocoData = PocoData.ForObject(poco, primaryKeyName);
+					var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, null);
+
+					foreach (var i in pocoData.Columns)
+					{
+						if(primaryKeyValuePairs.ContainsKey(i.Key))
+							primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
+					}
+					var sqlCondition = BuildPrimaryKeySql(primaryKeyValuePairs, ref index);
+					var query = string.Format(_dbType.GetExistsSql(), tableName, sqlCondition);
+					writeToFile("before command creation");
+					using (var cmd = CreateCommand(_sharedConnection, query))
+					{
+						writeParametersToFile(cmd.Parameters);
+						foreach (var keyValue in primaryKeyValuePairs)
+						{
+							var pi = pocoData.Columns.ContainsKey(keyValue.Key) ? pocoData.Columns[keyValue.Key].PropertyInfo : null;
+							AddParam(cmd, keyValue.Value, pi);
+						}
+						DoPreExecute(cmd);
+
+						// Do it
+						object val = await cmd.ExecuteScalarAsync();
+						OnExecutedCommand(cmd);
+
+						var integerVal = 0;
+						// Handle nullable types
+						Type u = Nullable.GetUnderlyingType(typeof(int));
+						if (u != null && val == null)
+							integerVal = default(int);
+
+						integerVal = (int)Convert.ChangeType(val, u ?? typeof(int));
+						return integerVal != 0;
+					}
+				}
+				finally
+				{
+					CloseSharedConnection();
+				}
 			}
-			System.IO.File.WriteAllLines(@".\WriteLines.txt", primaryKeys);
+			catch (Exception x)
+			{
+				if (OnException(x))
+					throw;
+				return default(int) != 0;
+			}
 		}
 
-		private Dictionary<string, object> createPrimaryKeyDictionary(object poco)
+		private void writeParametersToFile(DbParameterCollection cmdParameters)
 		{
-			var pd = PocoData.ForType(poco.GetType());
-			var primarKeyNames = parsePrimaryKeyNames(pd.TableInfo.PrimaryKey);
-			var primaryKeyDictionary = new Dictionary<string, object>(); 
-			foreach (var column in pd.Columns)
-				if (columnIsPrimaryKey(column, primarKeyNames))
-					primaryKeyDictionary.Add(column.Key, column.Value.GetValue(poco));
-			return primaryKeyDictionary;
+			var parameters = new string[cmdParameters.Count];
+			int index = 0;
+			foreach (IDbDataParameter parameter in cmdParameters)
+			{
+				parameters[index++] = parameter.ParameterName + "::" + parameter.Value;
+			}
+			System.IO.File.WriteAllLines(@".\WriteLines.txt", parameters);
 		}
 
-		private bool columnIsPrimaryKey(KeyValuePair<string, PocoColumn> column, string[] primarKeyNames)
+		private void writeToFile(string debugoutput)
 		{
-			return primarKeyNames.ToList().Contains(column.Key);
+			System.IO.File.WriteAllLines(@".\WriteLines.txt", new []{debugoutput});
 		}
 
 		#endregion
