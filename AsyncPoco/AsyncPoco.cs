@@ -1041,7 +1041,7 @@ namespace AsyncPoco
 					var primaryKeyName = pocoDataForType.TableInfo.PrimaryKey;
 					var pocoData = PocoData.ForObject(poco, primaryKeyName);
 						if(isAutoincrementAndDefaultKey(poco, pocoData))
-							throw new UninitializedPrimaryKeyException("Primary key, " + primaryKeyName + ", is not initialized to an incremental value.");
+							throw UninitializedPrimaryKeyException.showKeyMessage(primaryKeyName);
 					var tableName = pocoDataForType.TableInfo.TableName;
 					var index = 0;
 					var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, null);
@@ -4592,17 +4592,26 @@ namespace AsyncPoco
 			public UninitializedPrimaryKeyException()
 			{
 			}
+
 			public UninitializedPrimaryKeyException(string message) : base(message)
 			{
 			}
+
 			public UninitializedPrimaryKeyException(string message, Exception inner) : base(message, inner)
 			{
 			}
 
 			// This constructor is needed for serialization.
 			protected UninitializedPrimaryKeyException(SerializationInfo info, StreamingContext context)
-		{
-		}
+			{
+			}
+
+			public static UninitializedPrimaryKeyException showKeyMessage(dynamic key)
+			{
+				string message = message = "Primary key, " + key + ", is not initialized to an incremental value.";
+
+				return new UninitializedPrimaryKeyException(message);
+			}
 		}
 	}
 }

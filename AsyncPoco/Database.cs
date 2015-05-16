@@ -1032,7 +1032,7 @@ namespace AsyncPoco
                     var primaryKeyName = pocoDataForType.TableInfo.PrimaryKey;
                     var pocoData = PocoData.ForObject(poco, primaryKeyName);
                         if(isAutoincrementAndDefaultKey(poco, pocoData))
-                            throw new UninitializedPrimaryKeyException("Primary key, " + primaryKeyName + ", is not initialized to an incremental value.");
+                            throw UninitializedPrimaryKeyException.showKeyMessage(primaryKeyName);
 	                var tableName = pocoDataForType.TableInfo.TableName;
                     var index = 0;
                     var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, null);
