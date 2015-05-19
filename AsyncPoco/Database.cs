@@ -14,6 +14,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Configuration;
@@ -21,7 +23,9 @@ using System.Data.Common;
 using System.Data;
 using System.Text.RegularExpressions;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
+using AsyncPoco.Exceptions;
 using AsyncPoco.Internal;
 
 
@@ -1013,7 +1017,89 @@ namespace AsyncPoco
 			return ExistsAsync<T>(BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
 		}
 
-		#endregion
+	    /// <summary>
+	    /// Checks for the existance of a row with primary keys in poco.
+	    /// </summary>
+	    /// <param name="poco">The poco representing the record</param>
+	    /// <returns>True if a record with the specified primary key value inside the poco exists.</returns>
+	    public async Task<bool> ExistsAsync(object poco)
+        {
+	        try
+	        {
+	            await OpenSharedConnectionAsync();
+	            try
+	            {
+	                // exists
+	                var type = poco.GetType();
+                    var pocoDataForType = PocoData.ForType(type);
+                    var primaryKeyName = pocoDataForType.TableInfo.PrimaryKey;
+                    var pocoData = PocoData.ForObject(poco, primaryKeyName);
+                        if(isAutoincrementAndDefaultKey(poco, pocoData))
+                            throw UninitializedPrimaryKeyException.showKeyMessage(primaryKeyName);
+	                var tableName = pocoDataForType.TableInfo.TableName;
+                    var index = 0;
+                    var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, null);
+                    addValuesToPrimaryKeyValuePairs(poco, pocoData, primaryKeyValuePairs);
+                    var sqlCondition = BuildPrimaryKeySql(primaryKeyValuePairs, ref index);
+                    var query = string.Format(_dbType.GetExistsSql(), tableName, sqlCondition);
+                    using (var cmd = CreateCommand(_sharedConnection, ""))
+                    {
+                        cmd.CommandText = query;
+                        addPrimaryKeyParameters(primaryKeyValuePairs, pocoData, cmd);
+                        DoPreExecute(cmd);
+
+                        // Do it
+                        object val = await cmd.ExecuteScalarAsync();
+                        OnExecutedCommand(cmd);
+
+                        // Handle nullable types
+                        Type u = Nullable.GetUnderlyingType(typeof(int));
+                        if (u != null && val == null)
+                            return default(int) != 0;
+
+                        var integerVal = (int)Convert.ChangeType(val, u ?? typeof(int));
+                        return integerVal != 0;
+                    }
+                }
+                finally
+                {
+                    CloseSharedConnection();
+                }
+            }
+            catch (Exception x)
+            {
+                if (OnException(x))
+                    throw;
+                return default(int) != 0;
+            }
+        }
+
+        #endregion
+
+        private bool isAutoincrementAndDefaultKey(object poco, PocoData pocoData)
+	    {
+	        bool isAutoincrement = pocoData.TableInfo.AutoIncrement;
+	        string primaryKeyName = pocoData.TableInfo.PrimaryKey;
+	        return isAutoincrement && Convert.ToInt32(pocoData.Columns[primaryKeyName].GetValue(poco)) == 0;
+	    }
+
+	    private void addValuesToPrimaryKeyValuePairs(object poco, PocoData pocoData, Dictionary<string, object> primaryKeyValuePairs)
+	    {
+	        foreach (var i in pocoData.Columns)
+	        {
+	            if (primaryKeyValuePairs.ContainsKey(i.Key))
+	                primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
+	        }
+	    }
+
+	    private void addPrimaryKeyParameters(Dictionary<string, object> primaryKeyValuePairs, PocoData pocoData, DbCommand cmd)
+	    {
+	        foreach (var keyValue in primaryKeyValuePairs)
+	        {
+	            var pi = pocoData.Columns.ContainsKey(keyValue.Key) ? pocoData.Columns[keyValue.Key].PropertyInfo : null;
+	            AddParam(cmd, keyValue.Value, pi);
+	        }
+	    }
 
 		#region operation: linq style (Exists, Single, SingleOrDefault etc...)
 
@@ -2261,7 +2347,7 @@ namespace AsyncPoco
 		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue) {
 			Dictionary<string, object> primaryKeyValues;
 
-			var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
+            var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
 			if (primaryKeyValue != null) {
 				if (multiplePrimaryKeysNames.Length == 1) {
 					primaryKeyValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { primaryKeyName, primaryKeyValue } };
@@ -2278,7 +2364,7 @@ namespace AsyncPoco
 			return primaryKeyValues;
 		}
 
-		private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
+	    private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
 			var tempIndex = index;
 			index += primaryKeyValuePair.Count;
 			return string.Join(" AND ", primaryKeyValuePair.Select((x, i) => x.Value == null || x.Value == DBNull.Value ? string.Format("{0} IS NULL", _dbType.EscapeSqlIdentifier(x.Key)) : string.Format("{0} = @{1}", _dbType.EscapeSqlIdentifier(x.Key), tempIndex + i)).ToArray());

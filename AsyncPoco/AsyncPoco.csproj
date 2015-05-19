@@ -55,6 +55,7 @@
     <DocumentationFile>bin\Release\AsyncPoco.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.CSharp" />
     <Reference Include="System" />
     <Reference Include="System.configuration" />
     <Reference Include="System.Core" />
@@ -76,6 +77,7 @@
     <Compile Include="DatabaseTypes\SqlServerDatabaseType.cs" />
     <Compile Include="DatabaseTypes\SqlServerCEDatabaseType.cs" />
     <Compile Include="DatabaseTypes\MySqlDatabaseType.cs" />
+    <Compile Include="Exceptions\UninitializedPrimaryKeyException.cs" />
     <Compile Include="Utilities\AutoSelectHelper.cs" />
     <Compile Include="Utilities\PagingHelper.cs" />
     <Compile Include="Utilities\ParametersHelper.cs" />
