@@ -6,10 +6,10 @@ using PetaTest;
 
 namespace AsyncPoco.Tests
 {
-	[TestFixture("sqlserver")]
-	[TestFixture("sqlserverce")]
-	[TestFixture("mysql")]
-	[TestFixture("postgresql")]
+    [TestFixture("sqlserver")]
+    [TestFixture("sqlserverce")]
+    [TestFixture("mysql")]
+    [TestFixture("postgresql")]
 	public class Tests
 	{
 		public Tests(string connectionStringName)

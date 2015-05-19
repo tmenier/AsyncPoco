@@ -25,6 +25,8 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -1026,7 +1028,7 @@ namespace AsyncPoco
 		/// <summary>
 		/// Checks for the existance of a row with primary keys in poco.
 		/// </summary>
-		/// <param name="poco">The poco to look for</param>
+		/// <param name="poco">The poco representing the record</param>
 		/// <returns>True if a record with the specified primary key value inside the poco exists.</returns>
 		public async Task<bool> ExistsAsync(object poco)
 		{
@@ -1080,6 +1082,8 @@ namespace AsyncPoco
 			}
 		}
 
+		#endregion
+
 		private bool isAutoincrementAndDefaultKey(object poco, PocoData pocoData)
 		{
 			bool isAutoincrement = pocoData.TableInfo.AutoIncrement;
@@ -1104,8 +1108,6 @@ namespace AsyncPoco
 				AddParam(cmd, keyValue.Value, pi);
 			}
 		}
-
-		#endregion
 
 		#region operation: linq style (Exists, Single, SingleOrDefault etc...)
 
