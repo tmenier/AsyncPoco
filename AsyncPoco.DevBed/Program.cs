@@ -5,6 +5,7 @@ namespace AsyncPoco.DevBed
 	{
 		static int Main(string[] args)
 		{
+		    return 0;
 		}
 	}
 }
