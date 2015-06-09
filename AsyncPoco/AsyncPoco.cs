@@ -1492,7 +1492,7 @@ namespace AsyncPoco
 								addValuesToPrimaryKeyValuePairs(poco, pd, primaryKeyValuePairs);
 							foreach (var colname in columns)
 							{
-								if(primaryKeyValuePairs.ContainsKey(colname))
+								if(primaryKeyValue == null && primaryKeyValuePairs.ContainsKey(colname))
 									continue;
 								var pc = pd.Columns[colname];
 
