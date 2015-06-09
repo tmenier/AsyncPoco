@@ -1457,8 +1457,6 @@ namespace AsyncPoco
 						var index = 0;
 						var pd = PocoData.ForObject(poco,primaryKeyName);
 						var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, primaryKeyValue);
-						if(primaryKeyValue == null)
-							addValuesToPrimaryKeyValuePairs(poco, pd, primaryKeyValuePairs);
 
 						if (columns == null)
 						{
@@ -1490,8 +1488,12 @@ namespace AsyncPoco
 						}
 						else
 						{
+							if (primaryKeyValue == null)
+								addValuesToPrimaryKeyValuePairs(poco, pd, primaryKeyValuePairs);
 							foreach (var colname in columns)
 							{
+								if(primaryKeyValuePairs.ContainsKey(colname))
+									continue;
 								var pc = pd.Columns[colname];
 
 								// Build the sql
