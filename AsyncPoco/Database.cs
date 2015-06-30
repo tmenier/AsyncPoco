@@ -14,8 +14,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Text;
 using System.Configuration;
@@ -23,7 +22,6 @@ using System.Data.Common;
 using System.Data;
 using System.Text.RegularExpressions;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using AsyncPoco.Exceptions;
 using AsyncPoco.Internal;
@@ -1101,9 +1099,254 @@ namespace AsyncPoco
 	        }
 	    }
 
-		#region operation: linq style (Exists, Single, SingleOrDefault etc...)
+        #region operation: Merge
 
-		/// <summary>
+        /// <summary>
+        /// Merges and only inserts
+        /// </summary>
+        /// <typeparam name="T">The Type representing the table being queried</typeparam>
+        /// <param name="pocos">The pocos you need to mass insert</param>
+        /// <param name="tempTableName">The name of the temporary table used in the merge</param>
+        /// <returns>Returns the pocos successfully inserted.</returns>
+        public async Task<IEnumerable<T>> MergeInsertOnly<T>(IEnumerable<object> pocos, string tempTableName)
+        {
+            populateTempTable(tempTableName, pocos);
+            var pocoData = getPocoData(pocos);
+            return await mergeTablesInsertOnly<T>(tempTableName, pocoData);
+        }
+
+	    private void populateTempTable(string tempTableName, IEnumerable<object> pocos)
+        {
+            var pocoData = getPocoData(pocos);
+            var primaryKeyName = pocoData.TableInfo.PrimaryKey;
+            BulkInsert(tempTableName, primaryKeyName, false, pocos);
+        }
+
+        private async Task<IEnumerable<T>> mergeTablesInsertOnly<T>(string sourceTable, PocoData targetPocoData)
+        {
+            var primaryKeyValues = GetPrimaryKeyValues(targetPocoData.TableInfo.PrimaryKey, null);
+            var targetTable = targetPocoData.TableInfo.TableName;
+            var mergePrimaryKeyPart = getPrimaryKeyPartOfMerge(primaryKeyValues);
+            var targetTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "");
+            var sourceTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "S.");
+            var query = @"MERGE
+                            INTO " + targetTable + @" AS T 
+                            USING " + sourceTable + @" AS S 
+                            ON" + mergePrimaryKeyPart +
+                        @"WHEN NOT MATCHED BY TARGET
+                                THEN INSERT(" + targetTableColumns + ") VALUES(" + sourceTableColumns + @")
+                          OUTPUT inserted.*;";
+            return await FetchAsync<T>(query);
+        }
+
+        private object getCommaSeparatedColumns(Dictionary<string, PocoColumn> columns, string columnPrefix)
+        {
+            var columnList = "";
+            foreach (var column in columns)
+            {
+                columnList += columnPrefix + column.Key + ",";
+            }
+            return columnList.TrimEnd(',');
+        }
+
+        private string getPrimaryKeyPartOfMerge(Dictionary<string, object> primaryKeyValues)
+        {
+            var mergePrimaryKeyPart = "";
+            foreach (var primaryKeyValue in primaryKeyValues)
+            {
+                mergePrimaryKeyPart += String.Format(" Target.{0}=Source.{0} AND", primaryKeyValue.Key);
+            }
+            mergePrimaryKeyPart = Regex.Replace(mergePrimaryKeyPart, "AND$", "");
+            return mergePrimaryKeyPart;
+        }
+
+        private PocoData getPocoData(IEnumerable<object> pocos)
+        {
+            var poco = pocos.First();
+            var pocoData = getPocoData(poco);
+            return pocoData;
+        }
+
+	    private PocoData getPocoData(object poco)
+	    {
+	        var pocoType = poco.GetType();
+	        return PocoData.ForType(pocoType);
+	    }
+
+	    private DataTable createDataTable<T>()
+        {
+            var columns = returnColumns<T>();
+            var dataTable = new DataTable();
+            return addColumns(dataTable, columns);
+        }
+
+        private Dictionary<string, PocoColumn> returnColumns<T>()
+        {
+            var pocoData = PocoData.ForType(typeof(T));
+            var columns = pocoData.Columns;
+            return columns;
+        }
+
+        private string returnPrimaryKeyName<T>()
+        {
+            var pocoData = PocoData.ForType(typeof(T));
+            var primaryKeyName = pocoData.TableInfo.PrimaryKey;
+            return primaryKeyName;
+        }
+
+	    private DataTable addColumns(DataTable dataTable, Dictionary<string, PocoColumn> columns)
+        {
+            foreach (var column in columns)
+            {
+                dataTable.Columns.Add(new DataColumn(column.Key, column.Value.PropertyInfo.PropertyType));
+            }
+            return dataTable;
+        }
+
+        private DataTable populateDataTable<T>(DataTable dataTable, IEnumerable<T> pocos)
+        {
+            foreach (var poco in pocos)
+            {
+                createRowFromPoco(dataTable, poco);
+            }
+            return dataTable;
+        }
+
+	    private void createRowFromPoco<T>(DataTable dataTable, T poco)
+	    {
+	        var row = dataTable.NewRow();
+	        var columns = returnColumns<T>();
+	        foreach (var column in columns)
+	        {
+	            row[column.Key] = column.Value.GetValue(poco);
+	        }
+	    }
+
+	    #endregion
+
+        #region operation: Bulk (insert, update)
+        /// <summary>
+        /// Bulk inserts multiple rows to SQL
+        /// </summary>
+        /// <param name="tableName">The name of the table to insert into</param>
+        /// <param name="primaryKeyName">The name of the primary key column of the table</param>
+        /// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
+        /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>
+        /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
+        public async Task<int> BulkInsert(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
+        {
+            int totalInserted = 0;
+            try
+            {
+                await OpenSharedConnectionAsync();
+                try
+                {
+                    using (var cmd = CreateCommand(_sharedConnection, ""))
+                    {
+                        var pd = PocoData.ForObject(pocos.First(), primaryKeyName);
+                        // Create list of columnnames only once
+                        var names = new List<string>();
+                        foreach (var i in pd.Columns)
+                        {
+                            // Don't insert result columns
+                            if (i.Value.ResultColumn)
+                                continue;
+
+                            // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                            if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                            {
+                                // Setup auto increment expression
+                                string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                if (autoIncExpression != null)
+                                {
+                                    names.Add(i.Key);
+                                }
+                                continue;
+                            }
+                            names.Add(_dbType.EscapeSqlIdentifier(i.Key));
+                        }
+                        var namesArray = names.ToArray();
+
+                        var values = new List<string>();
+                        int count = 0;
+                        do
+                        {
+                            cmd.CommandText = "";
+                            cmd.Parameters.Clear();
+                            var index = 0;
+                            foreach (var poco in pocos.Skip(count).Take(batchSize))
+                            {
+                                values.Clear();
+                                foreach (var i in pd.Columns)
+                                {
+                                    // Don't insert result columns
+                                    if (i.Value.ResultColumn) continue;
+
+                                    // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                                    if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                                    {
+                                        // Setup auto increment expression
+                                        string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                        if (autoIncExpression != null)
+                                        {
+                                            values.Add(autoIncExpression);
+                                        }
+                                        continue;
+                                    }
+
+                                    values.Add(string.Format("{0}{1}", _paramPrefix, index++));
+                                    AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
+                                }
+
+                                string outputClause = String.Empty;
+                                if (autoIncrement)
+                                {
+                                    outputClause = _dbType.GetInsertOutputClause(primaryKeyName);
+                                }
+
+                                cmd.CommandText += string.Format("INSERT INTO {0} ({1}){2} VALUES ({3})", _dbType.EscapeTableName(tableName),
+                                                                 string.Join(",", namesArray), outputClause, string.Join(",", values.ToArray()));
+                            }
+                            // Are we done?
+                            if (cmd.CommandText == "") break;
+                            count += batchSize;
+                            DoPreExecute(cmd);
+                            totalInserted += cmd.ExecuteNonQuery();
+                            OnExecutedCommand(cmd);
+                        }
+                        while (true);
+                    }
+                }
+                finally
+                {
+                    CloseSharedConnection();
+                }
+            }
+            catch (Exception x)
+            {
+                if (OnException(x))
+                    throw;
+            }
+            return totalInserted;
+        }
+
+        /// <summary>
+        /// Performs a SQL Bulk Insert
+        /// </summary>
+        /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>        
+        /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
+        public void BulkInsert(IEnumerable<object> pocos, int batchSize = 25)
+        {
+            if (!pocos.Any()) return;
+            var pd = PocoData.ForType(pocos.First().GetType());
+            BulkInsert(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, pd.TableInfo.AutoIncrement, pocos);
+        }
+
+        #endregion
+
+        #region operation: linq style (Exists, Single, SingleOrDefault etc...)
+
+        /// <summary>
 		/// Returns the record with the specified primary key value
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>

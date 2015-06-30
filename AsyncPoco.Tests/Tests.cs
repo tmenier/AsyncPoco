@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AsyncPoco.Exceptions;
@@ -6,10 +7,10 @@ using PetaTest;
 
 namespace AsyncPoco.Tests
 {
-    [TestFixture("sqlserver")]
+    //[TestFixture("sqlserver")]
     [TestFixture("sqlserverce")]
-    [TestFixture("mysql")]
-    [TestFixture("postgresql")]
+    //[TestFixture("mysql")]
+    //[TestFixture("postgresql")]
 	public class Tests
 	{
 		public Tests(string connectionStringName)
@@ -922,6 +923,20 @@ namespace AsyncPoco.Tests
             {
                 await db.ExistsAsync(poco);
             });
+        }
+
+        [Test]
+        public async Task BulkInsertPocos()
+        {
+            var id = await InsertRecordsAsync(10);
+            await db.ExecuteAsync(@"select top 0 * into #AsyncPocoTemp from petapoco");
+            var poco1 = CreateDeco();
+            poco1.id = id + 1;
+            var poco2 = CreateDeco();
+            poco2.id = poco1.id + 1;
+            var pocoList = new List<deco>() {poco1, poco2};
+            var totalInserted = await db.BulkInsert("#AsyncPocoTemp", "id", false, pocoList);
+            Assert.AreEqual(2, totalInserted);
         }
 
 		[Test]
