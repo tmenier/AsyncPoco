@@ -1,14 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices.ComTypes;
+using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using AsyncPoco.Exceptions;
 using PetaTest;
 
 namespace AsyncPoco.Tests
 {
-    //[TestFixture("sqlserver")]
-    [TestFixture("sqlserverce")]
+    [TestFixture("sqlserver")]
+    //[TestFixture("sqlserverce")]
     //[TestFixture("mysql")]
     //[TestFixture("postgresql")]
 	public class Tests
@@ -26,17 +30,17 @@ namespace AsyncPoco.Tests
 		public async Task CreateDbAsync()
 		{
 			db = new Database(_connectionStringName);
-			var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName));
-			foreach(var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
-				await db.ExecuteAsync(sql);
+            //var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName));
+            //foreach(var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
+            //    await db.ExecuteAsync(sql);
 		}
 
 		[TestFixtureTearDown]
 		public async Task DeleteDbAsync()
 		{
-			var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName));
-			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
-				await db.ExecuteAsync(sql);
+            //var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName));
+            //foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
+            //    await db.ExecuteAsync(sql);
 		}
 
 		Task<long> GetRecordCountAsync()
@@ -127,23 +131,29 @@ namespace AsyncPoco.Tests
 		// Insert some records, return the id of the first
 		async Task<long> InsertRecordsAsync(int count)
 		{
-			long lFirst = 0;
-			for (int i = 0; i < count; i++)
-			{
-				var o=CreatePoco();
-				await db.InsertAsync("petapoco", "id", o);
-
-				var lc = db.LastCommand;
-
-				if (i == 0)
-				{
-					lFirst = o.id;
-					Assert.AreNotEqual(o.id, 0);
-				}
-			}
-
-			return lFirst;
+		    return await InsertRecordsAsync(count, db);
 		}
+
+        // Insert some records, return the id of the first
+        async Task<long> InsertRecordsAsync(int count, Database database)
+        {
+            long lFirst = 0;
+            for (int i = 0; i < count; i++)
+            {
+                var o = CreatePoco();
+                await database.InsertAsync("petapoco", "id", o);
+
+                var lc = database.LastCommand;
+
+                if (i == 0)
+                {
+                    lFirst = o.id;
+                    Assert.AreNotEqual(o.id, 0);
+                }
+            }
+
+            return lFirst;
+        }
 
 		[Test]
 		public async Task poco_Crud()
@@ -926,17 +936,75 @@ namespace AsyncPoco.Tests
         }
 
         [Test]
-        public async Task BulkInsertPocos()
+        public async Task MergeTablesTransactionCommits()
         {
-            var id = await InsertRecordsAsync(10);
-            await db.ExecuteAsync(@"select top 0 * into #AsyncPocoTemp from petapoco");
-            var poco1 = CreateDeco();
-            poco1.id = id + 1;
-            var poco2 = CreateDeco();
-            poco2.id = poco1.id + 1;
-            var pocoList = new List<deco>() {poco1, poco2};
-            var totalInserted = await db.BulkInsert("#AsyncPocoTemp", "id", false, pocoList);
+            var database = new Database(_connectionStringName);
+            var id = await InsertRecordsAsync(10, database);
+            var totalMerged = 0;
+            using (var scope = await db.GetTransactionAsync())
+            {
+                await db.ExecuteAsync(@"select top 0 * into #AsyncPocoTemp from petapoco");
+                await db.ExecuteAsync(@"set identity_insert #AsyncPocoTemp on");
+                var poco0 = CreateDeco();
+                poco0.id = id - 1;
+                var poco1 = CreateDeco();
+                poco1.id = id + 1;
+                var poco2 = CreateDeco();
+                poco2.id = poco1.id + 1;
+                var pocoList = new List<deco>() { poco0, poco1, poco2 };
+                var merged = await db.MergeInsertOnly<deco>(pocoList, "#AsyncPocoTemp");
+                totalMerged = merged.Count;
+                scope.Complete();
+            }
+            Assert.AreEqual(2, totalMerged);
+        }
+
+        [Test]
+        public async Task BulkInsertPocosTransactionCommits()
+        {
+            var totalInserted = 0;
+            using (var scope = await db.GetTransactionAsync())
+            {
+
+                var id = await InsertRecordsAsync(10);
+                await db.ExecuteAsync(@"select top 0 * into #AsyncPocoTemp from petapoco");
+                await db.ExecuteAsync(@"set identity_insert #AsyncPocoTemp on");
+                var poco1 = CreateDeco();
+                poco1.id = id + 1;
+                var poco2 = CreateDeco();
+                poco2.id = poco1.id + 1;
+                var pocoList = new List<deco>() { poco1, poco2 };
+                totalInserted = await db.BulkInsert("#AsyncPocoTemp", "id", false, pocoList);
+                scope.Complete();
+            }
             Assert.AreEqual(2, totalInserted);
+        }
+
+        [Test]
+        public async Task BulkInsertPocosTransactionRollsBack()
+        {
+            using (var scope = await db.GetTransactionAsync())
+            {
+                try
+                {
+                    var id = await InsertRecordsAsync(10);
+                    await db.ExecuteAsync(@"selec top 0 * into #AsyncPocoTemp from petapoco"); //throws exception
+                    await db.ExecuteAsync(@"set identity_insert #AsyncPocoTemp on");
+                    var poco1 = CreateDeco();
+                    poco1.id = id + 1;
+                    var poco2 = CreateDeco();
+                    poco2.id = poco1.id + 1;
+                    var pocoList = new List<deco>() { poco1, poco2 };
+                    await db.BulkInsert("#AsyncPocoTemp", "id", false, pocoList);
+                    scope.Complete();
+                }
+                catch(SqlException exception)
+                {
+                    Console.WriteLine("Bulk insert Failed : " + exception.Message);
+                }
+            }
+            var records = db.FetchAsync<poco>(@"select top 1 * from petapoco").Result;
+            Assert.AreEqual(0, records.Count);
         }
 
 		[Test]

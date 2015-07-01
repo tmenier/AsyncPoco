@@ -1108,21 +1108,21 @@ namespace AsyncPoco
         /// <param name="pocos">The pocos you need to mass insert</param>
         /// <param name="tempTableName">The name of the temporary table used in the merge</param>
         /// <returns>Returns the pocos successfully inserted.</returns>
-        public async Task<IEnumerable<T>> MergeInsertOnly<T>(IEnumerable<object> pocos, string tempTableName)
+        public async Task<List<T>> MergeInsertOnly<T>(IEnumerable<object> pocos, string tempTableName)
         {
-            populateTempTable(tempTableName, pocos);
+            await populateTempTable(tempTableName, pocos);
             var pocoData = getPocoData(pocos);
             return await mergeTablesInsertOnly<T>(tempTableName, pocoData);
         }
 
-	    private void populateTempTable(string tempTableName, IEnumerable<object> pocos)
+	    private async Task<int> populateTempTable(string tempTableName, IEnumerable<object> pocos)
         {
             var pocoData = getPocoData(pocos);
             var primaryKeyName = pocoData.TableInfo.PrimaryKey;
-            BulkInsert(tempTableName, primaryKeyName, false, pocos);
+            return await BulkInsert(tempTableName, primaryKeyName, false, pocos);
         }
 
-        private async Task<IEnumerable<T>> mergeTablesInsertOnly<T>(string sourceTable, PocoData targetPocoData)
+        private async Task<List<T>> mergeTablesInsertOnly<T>(string sourceTable, PocoData targetPocoData)
         {
             var primaryKeyValues = GetPrimaryKeyValues(targetPocoData.TableInfo.PrimaryKey, null);
             var targetTable = targetPocoData.TableInfo.TableName;
@@ -1133,8 +1133,8 @@ namespace AsyncPoco
                             INTO " + targetTable + @" AS T 
                             USING " + sourceTable + @" AS S 
                             ON" + mergePrimaryKeyPart +
-                        @"WHEN NOT MATCHED BY TARGET
-                                THEN INSERT(" + targetTableColumns + ") VALUES(" + sourceTableColumns + @")
+                        @"WHEN NOT MATCHED BY TARGET THEN
+                            INSERT(" + targetTableColumns + ") VALUES(" + sourceTableColumns + @")
                           OUTPUT inserted.*;";
             return await FetchAsync<T>(query);
         }
@@ -1144,7 +1144,7 @@ namespace AsyncPoco
             var columnList = "";
             foreach (var column in columns)
             {
-                columnList += columnPrefix + column.Key + ",";
+                columnList += columnPrefix + "[" + column.Key + "]" + ",";
             }
             return columnList.TrimEnd(',');
         }
@@ -1154,7 +1154,7 @@ namespace AsyncPoco
             var mergePrimaryKeyPart = "";
             foreach (var primaryKeyValue in primaryKeyValues)
             {
-                mergePrimaryKeyPart += String.Format(" Target.{0}=Source.{0} AND", primaryKeyValue.Key);
+                mergePrimaryKeyPart += String.Format(" T.[{0}]=S.[{0}] AND", primaryKeyValue.Key);
             }
             mergePrimaryKeyPart = Regex.Replace(mergePrimaryKeyPart, "AND$", "");
             return mergePrimaryKeyPart;
