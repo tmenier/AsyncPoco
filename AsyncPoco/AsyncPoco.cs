@@ -1120,7 +1120,7 @@ namespace AsyncPoco
 		public async Task<List<T>> MergeInsertOnly<T>(IEnumerable<T> pocos, int batchSize = 25)
 		{
 			var pocoData = PocoData.ForType(typeof(T));
-			createTempTable(pocoData.TableInfo.TableName);
+			createTempTable(pocoData);
 			await populateTempTable(tempTable, pocos, batchSize);
 			return await mergeTablesInsertOnly<T>(tempTable, pocoData);
 		}
@@ -1138,10 +1138,24 @@ namespace AsyncPoco
 			return PocoData.ForType(pocoType);
 		}
 
-		private async void createTempTable(string targetTable)
+		private async void createTempTable(PocoData pocoData)
 		{
-			await ExecuteAsync(@"select top 0 * into " + tempTable + " from " + targetTable);
-			await ExecuteAsync(@"set identity_insert " + tempTable + " on");
+			await ExecuteAsync(@"select top 0 * into " + tempTable + " from " + pocoData.TableInfo.TableName);
+			await Task.Run(async () =>
+			{
+				if (hasIdentityColumn(pocoData.Columns))
+					await ExecuteAsync(@"set identity_insert " + tempTable + " on");
+			});
+		}
+
+		private bool hasIdentityColumn(Dictionary<string, PocoColumn> columns)
+		{
+			foreach (var column in columns)
+			{
+				if (column.Value.IdentityColumn)
+					return true;
+			}
+			return false;
 		}
 
 		private async Task<int> populateTempTable<T>(string tempTable, IEnumerable<T> pocos, int batchSize = 25)
