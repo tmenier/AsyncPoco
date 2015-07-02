@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Text;
 using System.Configuration;
@@ -22,6 +23,7 @@ using System.Data;
 using System.Text.RegularExpressions;
 using System.Reflection;
 using System.Threading.Tasks;
+using AsyncPoco.Exceptions;
 using AsyncPoco.Internal;
 
 
@@ -1013,11 +1015,471 @@ namespace AsyncPoco
 			return ExistsAsync<T>(BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
 		}
 
-		#endregion
+	    /// <summary>
+	    /// Checks for the existance of a row with primary keys in poco.
+	    /// </summary>
+	    /// <param name="poco">The poco representing the record</param>
+	    /// <returns>True if a record with the specified primary key value inside the poco exists.</returns>
+	    public async Task<bool> ExistsAsync(object poco)
+        {
+	        try
+	        {
+	            await OpenSharedConnectionAsync();
+	            try
+	            {
+	                // exists
+	                var type = poco.GetType();
+                    var pocoDataForType = PocoData.ForType(type);
+                    var primaryKeyName = pocoDataForType.TableInfo.PrimaryKey;
+                    var pocoData = PocoData.ForObject(poco, primaryKeyName);
+                        if(isAutoincrementAndDefaultKey(poco, pocoData))
+                            throw UninitializedPrimaryKeyException.showKeyMessage(primaryKeyName);
+	                var tableName = pocoDataForType.TableInfo.TableName;
+                    var index = 0;
+                    var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, null);
+                    addValuesToPrimaryKeyValuePairs(poco, pocoData, primaryKeyValuePairs);
+                    var sqlCondition = BuildPrimaryKeySql(primaryKeyValuePairs, ref index);
+                    var query = string.Format(_dbType.GetExistsSql(), tableName, sqlCondition);
+                    using (var cmd = CreateCommand(_sharedConnection, ""))
+                    {
+                        cmd.CommandText = query;
+                        addPrimaryKeyParameters(primaryKeyValuePairs, pocoData, cmd);
+                        DoPreExecute(cmd);
 
-		#region operation: linq style (Exists, Single, SingleOrDefault etc...)
+                        // Do it
+                        object val = await cmd.ExecuteScalarAsync();
+                        OnExecutedCommand(cmd);
 
-		/// <summary>
+                        // Handle nullable types
+                        Type u = Nullable.GetUnderlyingType(typeof(int));
+                        if (u != null && val == null)
+                            return default(int) != 0;
+
+                        var integerVal = (int)Convert.ChangeType(val, u ?? typeof(int));
+                        return integerVal != 0;
+                    }
+                }
+                finally
+                {
+                    CloseSharedConnection();
+                }
+            }
+            catch (Exception x)
+            {
+                if (OnException(x))
+                    throw;
+                return default(int) != 0;
+            }
+        }
+
+        #endregion
+
+        private bool isAutoincrementAndDefaultKey(object poco, PocoData pocoData)
+	    {
+	        bool isAutoincrement = pocoData.TableInfo.AutoIncrement;
+	        string primaryKeyName = pocoData.TableInfo.PrimaryKey;
+	        return isAutoincrement && Convert.ToInt32(pocoData.Columns[primaryKeyName].GetValue(poco)) == 0;
+	    }
+
+	    private void addValuesToPrimaryKeyValuePairs(object poco, PocoData pocoData, Dictionary<string, object> primaryKeyValuePairs)
+	    {
+	        foreach (var i in pocoData.Columns)
+	        {
+	            if (primaryKeyValuePairs.ContainsKey(i.Key))
+	                primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
+	        }
+	    }
+
+	    private void addPrimaryKeyParameters(Dictionary<string, object> primaryKeyValuePairs, PocoData pocoData, DbCommand cmd)
+	    {
+	        foreach (var keyValue in primaryKeyValuePairs)
+	        {
+	            var pi = pocoData.Columns.ContainsKey(keyValue.Key) ? pocoData.Columns[keyValue.Key].PropertyInfo : null;
+	            AddParam(cmd, keyValue.Value, pi);
+	        }
+	    }
+
+        #region operation: Merge
+
+        /// <summary>
+        /// Merges and only inserts
+        /// </summary>
+        /// <typeparam name="T">The Type representing the table being queried</typeparam>
+        /// <param name="pocos">The pocos you need to mass insert</param>
+        /// <param name="tempTableName">The name of the temporary table used in the merge</param>
+        /// <returns>Returns the pocos successfully inserted.</returns>
+        public async Task<List<T>> MergeInsertOnly<T>(IEnumerable<T> pocos, int batchSize = 25)
+        {
+            var pocoData = PocoData.ForType(typeof(T));
+            createTempTable(pocoData);
+            await populateTempTable(tempTable, pocos, batchSize);
+            return await mergeTablesInsertOnly<T>(tempTable, pocoData);
+        }
+
+        private PocoData getPocoData(IEnumerable<object> pocos)
+        {
+            var poco = pocos.First();
+            var pocoData = getPocoData(poco);
+            return pocoData;
+        }
+
+        private PocoData getPocoData(object poco)
+        {
+            var pocoType = poco.GetType();
+            return PocoData.ForType(pocoType);
+        }
+
+        private async void createTempTable(PocoData pocoData)
+        {
+            await ExecuteAsync(@"select top 0 * into " + tempTable + " from " + pocoData.TableInfo.TableName);
+            await Task.Run(async () =>
+            {
+                if (hasIdentityColumn(pocoData.Columns))
+                    await ExecuteAsync(@"set identity_insert " + tempTable + " on");
+            });
+        }
+
+        private bool hasIdentityColumn(Dictionary<string, PocoColumn> columns)
+        {
+            foreach (var column in columns)
+            {
+                if (column.Value.IdentityColumn)
+                    return true;
+            }
+            return false;
+        }
+
+	    private async Task<int> populateTempTable<T>(string tempTable, IEnumerable<T> pocos, int batchSize = 25)
+        {
+            var pocoData = getPocoData(pocos);
+            var primaryKeyName = pocoData.TableInfo.PrimaryKey;
+            return await BulkInsertWithIdentitiesAsync(tempTable, primaryKeyName, false, pocos, batchSize);
+        }
+
+        private async Task<List<T>> mergeTablesInsertOnly<T>(string sourceTable, PocoData targetPocoData)
+        {
+            var primaryKeyValues = GetPrimaryKeyValues(targetPocoData.TableInfo.PrimaryKey, null);
+            var targetTable = targetPocoData.TableInfo.TableName;
+            var mergePrimaryKeyPart = getPrimaryKeyPartOfMerge(primaryKeyValues);
+            var targetTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "");
+            var sourceTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "S.");
+            //prefix with ";" to prevent autoselect clause
+            var query = @";MERGE
+                            INTO " + targetTable + @" AS T 
+                            USING " + sourceTable + @" AS S 
+                            ON" + mergePrimaryKeyPart +
+                        @"WHEN NOT MATCHED BY TARGET THEN
+                            INSERT(" + targetTableColumns + ") VALUES(" + sourceTableColumns + @")
+                          OUTPUT inserted.*;";
+            return await FetchAsync<T>(query);
+        }
+
+        private object getCommaSeparatedColumns(Dictionary<string, PocoColumn> columns, string columnPrefix)
+        {
+            var columnList = "";
+            foreach (var column in columns)
+            {
+                if(column.Value.IdentityColumn)
+                    continue;
+                columnList += columnPrefix + "[" + column.Key + "]" + ",";
+            }
+            return columnList.TrimEnd(',');
+        }
+
+        private string getPrimaryKeyPartOfMerge(Dictionary<string, object> primaryKeyValues)
+        {
+            var mergePrimaryKeyPart = "";
+            foreach (var primaryKeyValue in primaryKeyValues)
+            {
+                mergePrimaryKeyPart += String.Format(" T.[{0}]=S.[{0}] AND", primaryKeyValue.Key);
+            }
+            mergePrimaryKeyPart = Regex.Replace(mergePrimaryKeyPart, "AND$", "");
+            return mergePrimaryKeyPart;
+        }
+
+	    private DataTable createDataTable<T>()
+        {
+            var columns = returnColumns<T>();
+            var dataTable = new DataTable();
+            return addColumns(dataTable, columns);
+        }
+
+        private Dictionary<string, PocoColumn> returnColumns<T>()
+        {
+            var pocoData = PocoData.ForType(typeof(T));
+            var columns = pocoData.Columns;
+            return columns;
+        }
+
+        private string returnPrimaryKeyName<T>()
+        {
+            var pocoData = PocoData.ForType(typeof(T));
+            var primaryKeyName = pocoData.TableInfo.PrimaryKey;
+            return primaryKeyName;
+        }
+
+	    private DataTable addColumns(DataTable dataTable, Dictionary<string, PocoColumn> columns)
+        {
+            foreach (var column in columns)
+            {
+                dataTable.Columns.Add(new DataColumn(column.Key, column.Value.PropertyInfo.PropertyType));
+            }
+            return dataTable;
+        }
+
+        private DataTable populateDataTable<T>(DataTable dataTable, IEnumerable<T> pocos)
+        {
+            foreach (var poco in pocos)
+            {
+                createRowFromPoco(dataTable, poco);
+            }
+            return dataTable;
+        }
+
+	    private void createRowFromPoco<T>(DataTable dataTable, T poco)
+	    {
+	        var row = dataTable.NewRow();
+	        var columns = returnColumns<T>();
+	        foreach (var column in columns)
+	        {
+	            row[column.Key] = column.Value.GetValue(poco);
+	        }
+	    }
+
+	    #endregion
+
+        #region operation: Bulk (insert, update)
+        /// <summary>
+        /// Bulk inserts multiple rows to SQL
+        /// </summary>
+        /// <param name="tableName">The name of the table to insert into</param>
+        /// <param name="primaryKeyName">The name of the primary key column of the table</param>
+        /// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
+        /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>
+        /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
+        public async Task<int> BulkInsertAsync(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
+        {
+            try
+            {
+                await OpenSharedConnectionAsync();
+                try
+                {
+                    using (var cmd = CreateCommand(_sharedConnection, ""))
+                    {
+                        var pd = PocoData.ForObject(pocos.First(), primaryKeyName);
+                        // Create list of columnnames only once
+                        var names = new List<string>();
+                        foreach (var i in pd.Columns)
+                        {
+                            // Don't insert result columns or identity columns
+                            if (i.Value.ResultColumn || i.Value.IdentityColumn)
+                                continue;
+
+                            // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                            if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                            {
+                                // Setup auto increment expression
+                                string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                if (autoIncExpression != null)
+                                {
+                                    names.Add(i.Key);
+                                }
+                                continue;
+                            }
+                            names.Add(_dbType.EscapeSqlIdentifier(i.Key));
+                        }
+                        var namesArray = names.ToArray();
+
+                        var values = new List<string>();
+                        int count = 0;
+                        int totalInserted = 0;
+                        do
+                        {
+                            cmd.CommandText = "";
+                            cmd.Parameters.Clear();
+                            var index = 0;
+                            foreach (var poco in pocos.Skip(count).Take(batchSize))
+                            {
+                                values.Clear();
+                                foreach (var i in pd.Columns)
+                                {
+                                    // Don't insert result columns
+                                    if (i.Value.ResultColumn || i.Value.IdentityColumn)
+                                        continue;
+
+                                    // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                                    if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                                    {
+                                        // Setup auto increment expression
+                                        string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                        if (autoIncExpression != null)
+                                        {
+                                            values.Add(autoIncExpression);
+                                        }
+                                        continue;
+                                    }
+
+                                    values.Add(string.Format("{0}{1}", _paramPrefix, index++));
+                                    AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
+                                }
+
+                                string outputClause = String.Empty;
+                                if (autoIncrement)
+                                {
+                                    outputClause = _dbType.GetInsertOutputClause(primaryKeyName);
+                                }
+
+                                cmd.CommandText += string.Format("INSERT INTO {0} ({1}){2} VALUES ({3})", _dbType.EscapeTableName(tableName),
+                                                                 string.Join(",", namesArray), outputClause, string.Join(",", values.ToArray()));
+                            }
+                            // Are we done?
+                            if (cmd.CommandText == "") break;
+                            count += batchSize;
+                            DoPreExecute(cmd);
+                            totalInserted += await cmd.ExecuteNonQueryAsync();
+                            OnExecutedCommand(cmd);
+                        }
+                        while (true);
+                        return totalInserted;
+                    }
+                }
+                finally
+                {
+                    CloseSharedConnection();
+                }
+            }
+            catch (Exception x)
+            {
+                if (OnException(x))
+                    throw;
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Bulk inserts multiple rows to SQL
+        /// </summary>
+        /// <param name="tableName">The name of the table to insert into</param>
+        /// <param name="primaryKeyName">The name of the primary key column of the table</param>
+        /// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
+        /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>
+        /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
+        public async Task<int> BulkInsertWithIdentitiesAsync<T>(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<T> pocos, int batchSize = 25)
+        {
+            try
+            {
+                await OpenSharedConnectionAsync();
+                try
+                {
+                    using (var cmd = CreateCommand(_sharedConnection, ""))
+                    {
+                        var pd = PocoData.ForObject(pocos.First(), primaryKeyName);
+                        // Create list of columnnames only once
+                        var names = new List<string>();
+                        foreach (var i in pd.Columns)
+                        {
+                            // Don't insert result columns or identity columns
+                            if (i.Value.ResultColumn)
+                                continue;
+
+                            // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                            if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                            {
+                                // Setup auto increment expression
+                                string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                if (autoIncExpression != null)
+                                {
+                                    names.Add(i.Key);
+                                }
+                                continue;
+                            }
+                            names.Add(_dbType.EscapeSqlIdentifier(i.Key));
+                        }
+                        var namesArray = names.ToArray();
+
+                        var values = new List<string>();
+                        int count = 0;
+                        int totalInserted = 0;
+                        do
+                        {
+                            cmd.CommandText = "";
+                            cmd.Parameters.Clear();
+                            var index = 0;
+                            foreach (var poco in pocos.Skip(count).Take(batchSize))
+                            {
+                                values.Clear();
+                                foreach (var i in pd.Columns)
+                                {
+                                    // Don't insert result columns
+                                    if (i.Value.ResultColumn)
+                                        continue;
+
+                                    // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                                    if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                                    {
+                                        // Setup auto increment expression
+                                        string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                        if (autoIncExpression != null)
+                                        {
+                                            values.Add(autoIncExpression);
+                                        }
+                                        continue;
+                                    }
+
+                                    values.Add(string.Format("{0}{1}", _paramPrefix, index++));
+                                    AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
+                                }
+
+                                string outputClause = String.Empty;
+                                if (autoIncrement)
+                                {
+                                    outputClause = _dbType.GetInsertOutputClause(primaryKeyName);
+                                }
+
+                                cmd.CommandText += string.Format("INSERT INTO {0} ({1}){2} VALUES ({3})", _dbType.EscapeTableName(tableName),
+                                                                 string.Join(",", namesArray), outputClause, string.Join(",", values.ToArray()));
+                            }
+                            // Are we done?
+                            if (cmd.CommandText == "") break;
+                            count += batchSize;
+                            DoPreExecute(cmd);
+                            totalInserted += await cmd.ExecuteNonQueryAsync();
+                            OnExecutedCommand(cmd);
+                        }
+                        while (true);
+                        return totalInserted;
+                    }
+                }
+                finally
+                {
+                    CloseSharedConnection();
+                }
+            }
+            catch (Exception x)
+            {
+                if (OnException(x))
+                    throw;
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Performs a SQL Bulk Insert
+        /// </summary>
+        /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>        
+        /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
+        public async Task<int> BulkInsertAsync(IEnumerable<object> pocos, int batchSize = 25)
+        {
+            if (!pocos.Any()) return 0;
+            var pd = PocoData.ForType(pocos.First().GetType());
+            return await BulkInsertAsync(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, pd.TableInfo.AutoIncrement, pocos);
+        }
+
+        #endregion
+
+        #region operation: linq style (Exists, Single, SingleOrDefault etc...)
+
+        /// <summary>
 		/// Returns the record with the specified primary key value
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
@@ -1393,9 +1855,13 @@ namespace AsyncPoco
 							}
 						}
 						else
-						{
+                        {
+                            if (primaryKeyValue == null)
+                                addValuesToPrimaryKeyValuePairs(poco, pd, primaryKeyValuePairs);
 							foreach (var colname in columns)
 							{
+                                if(primaryKeyValue == null && primaryKeyValuePairs.ContainsKey(colname))
+							        continue;
 								var pc = pd.Columns[colname];
 
 								// Build the sql
@@ -1412,7 +1878,6 @@ namespace AsyncPoco
 							_dbType.EscapeTableName(tableName), 
 							sb, 
 							BuildPrimaryKeySql(primaryKeyValuePairs, ref index));
-
 						foreach (var keyValue in primaryKeyValuePairs) {
 							var pi = pd.Columns.ContainsKey(keyValue.Key) ? pd.Columns[keyValue.Key].PropertyInfo : null;
 							AddParam(cmd, keyValue.Value, pi);
@@ -2216,6 +2681,7 @@ namespace AsyncPoco
 		string _lastSql;
 		object[] _lastArgs;
 		string _paramPrefix;
+	    private const string tempTable = "#AsyncPocoTemp";
 		#endregion
 
 		#region Internal operations
@@ -2261,7 +2727,7 @@ namespace AsyncPoco
 		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue) {
 			Dictionary<string, object> primaryKeyValues;
 
-			var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
+            var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
 			if (primaryKeyValue != null) {
 				if (multiplePrimaryKeysNames.Length == 1) {
 					primaryKeyValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { primaryKeyName, primaryKeyValue } };
@@ -2278,7 +2744,7 @@ namespace AsyncPoco
 			return primaryKeyValues;
 		}
 
-		private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
+	    private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
 			var tempIndex = index;
 			index += primaryKeyValuePair.Count;
 			return string.Join(" AND ", primaryKeyValuePair.Select((x, i) => x.Value == null || x.Value == DBNull.Value ? string.Format("{0} IS NULL", _dbType.EscapeSqlIdentifier(x.Key)) : string.Format("{0} = @{1}", _dbType.EscapeSqlIdentifier(x.Key), tempIndex + i)).ToArray());

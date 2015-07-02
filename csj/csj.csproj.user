@@ -5,6 +5,6 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
     <StartArguments>-o:PetaPoco.cs Database.cs -r *.cs -x:Properties\*.cs</StartArguments>
-    <StartWorkingDirectory>C:\b\dev\Source\petapoco\PetaPoco\</StartWorkingDirectory>
+    <StartWorkingDirectory>D:\Users\pkrueger\Documents\Visual Studio 2013\Projects\AsyncPoco\AsyncPoco\</StartWorkingDirectory>
   </PropertyGroup>
 </Project>

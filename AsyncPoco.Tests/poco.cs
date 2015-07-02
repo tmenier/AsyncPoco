@@ -37,7 +37,7 @@ namespace AsyncPoco.Tests
 	[ExplicitColumns]
 	class deco
 	{
-		[Column] public long id { get; set; }
+		[IdentityColumn] public long id { get; set; }
 		[Column] public string title { get; set; }
 		[Column] public bool draft { get; set; }
 		[Column(ForceToUtc=true)] public DateTime date_created { get; set; }
