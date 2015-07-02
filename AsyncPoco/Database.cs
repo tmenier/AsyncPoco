@@ -1108,18 +1108,38 @@ namespace AsyncPoco
         /// <param name="pocos">The pocos you need to mass insert</param>
         /// <param name="tempTableName">The name of the temporary table used in the merge</param>
         /// <returns>Returns the pocos successfully inserted.</returns>
-        public async Task<List<T>> MergeInsertOnly<T>(IEnumerable<object> pocos, string tempTableName)
+        public async Task<List<T>> MergeInsertOnly<T>(IEnumerable<object> pocos)
         {
-            await populateTempTable(tempTableName, pocos);
             var pocoData = getPocoData(pocos);
-            return await mergeTablesInsertOnly<T>(tempTableName, pocoData);
+            createTempTable(pocoData.TableInfo.TableName);
+            await populateTempTable(tempTable, pocos);
+            return await mergeTablesInsertOnly<T>(tempTable, pocoData);
         }
 
-	    private async Task<int> populateTempTable(string tempTableName, IEnumerable<object> pocos)
+        private PocoData getPocoData(IEnumerable<object> pocos)
+        {
+            var poco = pocos.First();
+            var pocoData = getPocoData(poco);
+            return pocoData;
+        }
+
+        private PocoData getPocoData(object poco)
+        {
+            var pocoType = poco.GetType();
+            return PocoData.ForType(pocoType);
+        }
+
+        private async void createTempTable(string targetTable)
+        {
+            await ExecuteAsync(@"select top 0 * into " + tempTable + " from " + targetTable);
+            await ExecuteAsync(@"set identity_insert " + tempTable + " on");
+        }
+
+	    private async Task<int> populateTempTable(string tempTable, IEnumerable<object> pocos)
         {
             var pocoData = getPocoData(pocos);
             var primaryKeyName = pocoData.TableInfo.PrimaryKey;
-            return await BulkInsert(tempTableName, primaryKeyName, false, pocos);
+            return await BulkInsertWithIdentitiesAsync(tempTable, primaryKeyName, false, pocos);
         }
 
         private async Task<List<T>> mergeTablesInsertOnly<T>(string sourceTable, PocoData targetPocoData)
@@ -1162,19 +1182,6 @@ namespace AsyncPoco
             mergePrimaryKeyPart = Regex.Replace(mergePrimaryKeyPart, "AND$", "");
             return mergePrimaryKeyPart;
         }
-
-        private PocoData getPocoData(IEnumerable<object> pocos)
-        {
-            var poco = pocos.First();
-            var pocoData = getPocoData(poco);
-            return pocoData;
-        }
-
-	    private PocoData getPocoData(object poco)
-	    {
-	        var pocoType = poco.GetType();
-	        return PocoData.ForType(pocoType);
-	    }
 
 	    private DataTable createDataTable<T>()
         {
@@ -1236,7 +1243,114 @@ namespace AsyncPoco
         /// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
         /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>
         /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
-        public async Task<int> BulkInsert(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
+        public async Task<int> BulkInsertAsync(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
+        {
+            try
+            {
+                await OpenSharedConnectionAsync();
+                try
+                {
+                    using (var cmd = CreateCommand(_sharedConnection, ""))
+                    {
+                        var pd = PocoData.ForObject(pocos.First(), primaryKeyName);
+                        // Create list of columnnames only once
+                        var names = new List<string>();
+                        foreach (var i in pd.Columns)
+                        {
+                            // Don't insert result columns or identity columns
+                            if (i.Value.ResultColumn || i.Value.IdentityColumn)
+                                continue;
+
+                            // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                            if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                            {
+                                // Setup auto increment expression
+                                string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                if (autoIncExpression != null)
+                                {
+                                    names.Add(i.Key);
+                                }
+                                continue;
+                            }
+                            names.Add(_dbType.EscapeSqlIdentifier(i.Key));
+                        }
+                        var namesArray = names.ToArray();
+
+                        var values = new List<string>();
+                        int count = 0;
+                        int totalInserted = 0;
+                        do
+                        {
+                            cmd.CommandText = "";
+                            cmd.Parameters.Clear();
+                            var index = 0;
+                            foreach (var poco in pocos.Skip(count).Take(batchSize))
+                            {
+                                values.Clear();
+                                foreach (var i in pd.Columns)
+                                {
+                                    // Don't insert result columns
+                                    if (i.Value.ResultColumn || i.Value.IdentityColumn)
+                                        continue;
+
+                                    // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
+                                    if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
+                                    {
+                                        // Setup auto increment expression
+                                        string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+                                        if (autoIncExpression != null)
+                                        {
+                                            values.Add(autoIncExpression);
+                                        }
+                                        continue;
+                                    }
+
+                                    values.Add(string.Format("{0}{1}", _paramPrefix, index++));
+                                    AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
+                                }
+
+                                string outputClause = String.Empty;
+                                if (autoIncrement)
+                                {
+                                    outputClause = _dbType.GetInsertOutputClause(primaryKeyName);
+                                }
+
+                                cmd.CommandText += string.Format("INSERT INTO {0} ({1}){2} VALUES ({3})", _dbType.EscapeTableName(tableName),
+                                                                 string.Join(",", namesArray), outputClause, string.Join(",", values.ToArray()));
+                            }
+                            // Are we done?
+                            if (cmd.CommandText == "") break;
+                            count += batchSize;
+                            DoPreExecute(cmd);
+                            totalInserted += await cmd.ExecuteNonQueryAsync();
+                            OnExecutedCommand(cmd);
+                        }
+                        while (true);
+                        return totalInserted;
+                    }
+                }
+                finally
+                {
+                    CloseSharedConnection();
+                }
+            }
+            catch (Exception x)
+            {
+                if (OnException(x))
+                    throw;
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Bulk inserts multiple rows to SQL
+        /// </summary>
+        /// <param name="tableName">The name of the table to insert into</param>
+        /// <param name="primaryKeyName">The name of the primary key column of the table</param>
+        /// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
+        /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>
+        /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
+        public async Task<int> BulkInsertWithIdentitiesAsync(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
         {
             try
             {
@@ -1340,11 +1454,11 @@ namespace AsyncPoco
         /// </summary>
         /// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>        
         /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
-        public void BulkInsert(IEnumerable<object> pocos, int batchSize = 25)
+        public async Task<int> BulkInsertAsync(IEnumerable<object> pocos, int batchSize = 25)
         {
-            if (!pocos.Any()) return;
+            if (!pocos.Any()) return 0;
             var pd = PocoData.ForType(pocos.First().GetType());
-            BulkInsert(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, pd.TableInfo.AutoIncrement, pocos);
+            return await BulkInsertAsync(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, pd.TableInfo.AutoIncrement, pocos);
         }
 
         #endregion
@@ -2553,6 +2667,7 @@ namespace AsyncPoco
 		string _lastSql;
 		object[] _lastArgs;
 		string _paramPrefix;
+	    private const string tempTable = "#AsyncPocoTemp";
 		#endregion
 
 		#region Internal operations

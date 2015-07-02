@@ -72,6 +72,7 @@
     <Compile Include="Core\MultiPocoFactory.cs" />
     <Compile Include="Core\DatabaseType.cs" />
     <Compile Include="Core\StandardMapper.cs" />
+    <Compile Include="DatabaseOperations\DatabaseOperation.cs" />
     <Compile Include="DatabaseTypes\SQLiteDatabaseType.cs" />
     <Compile Include="DatabaseTypes\OracleDatabaseType.cs" />
     <Compile Include="DatabaseTypes\PostgreSQLDatabaseType.cs" />

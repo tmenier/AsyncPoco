@@ -936,15 +936,13 @@ namespace AsyncPoco.Tests
         }
 
         [Test]
-        public async Task MergeTablesTransactionCommits()
+        public async Task MergePocosTransactionCommits()
         {
             var totalMerged = 0;
             using (var scope = await db.GetTransactionAsync())
             {
-                var startingAmount = 10;
+                const int startingAmount = 10;
                 var firstId = await InsertRecordsAsync(startingAmount);
-                await db.ExecuteAsync(@"select top 0 * into #AsyncPocoTemp from petapoco");
-                await db.ExecuteAsync(@"set identity_insert #AsyncPocoTemp on");
                 var poco0 = CreateDeco();
                 poco0.id = firstId + startingAmount - 1;
                 var poco1 = CreateDeco();
@@ -952,7 +950,7 @@ namespace AsyncPoco.Tests
                 var poco2 = CreateDeco();
                 poco2.id = firstId + startingAmount + 1;
                 var pocoList = new List<deco>() { poco0, poco1, poco2 };
-                var merged = await db.MergeInsertOnly<deco>(pocoList, "#AsyncPocoTemp");
+                var merged = await db.MergeInsertOnly<deco>(pocoList);
                 scope.Complete();
                 totalMerged = merged.Count;
             }
@@ -966,15 +964,14 @@ namespace AsyncPoco.Tests
             using (var scope = await db.GetTransactionAsync())
             {
 
-                var id = await InsertRecordsAsync(10);
-                await db.ExecuteAsync(@"select top 0 * into #AsyncPocoTemp from petapoco");
-                await db.ExecuteAsync(@"set identity_insert #AsyncPocoTemp on");
+                const int startingAmount = 10;
+                var firstId = await InsertRecordsAsync(startingAmount);
+                var poco0 = CreateDeco();
+                poco0.id = firstId + startingAmount;
                 var poco1 = CreateDeco();
-                poco1.id = id + 1;
-                var poco2 = CreateDeco();
-                poco2.id = poco1.id + 1;
-                var pocoList = new List<deco>() { poco1, poco2 };
-                totalInserted = await db.BulkInsert("#AsyncPocoTemp", "id", false, pocoList);
+                poco1.id = firstId + startingAmount + 1;
+                var pocoList = new List<deco>() { poco0, poco1 };
+                totalInserted = await db.BulkInsertAsync(pocoList);
                 scope.Complete();
             }
             Assert.AreEqual(2, totalInserted);
@@ -987,15 +984,15 @@ namespace AsyncPoco.Tests
             {
                 try
                 {
-                    var id = await InsertRecordsAsync(10);
-                    await db.ExecuteAsync(@"selec top 0 * into #AsyncPocoTemp from petapoco"); //throws exception
-                    await db.ExecuteAsync(@"set identity_insert #AsyncPocoTemp on");
+                    const int startingAmount = 10;
+                    var firstId = await InsertRecordsAsync(startingAmount);
+                    await db.ExecuteAsync("insert into petapoco set id=1");//breaks transaction
+                    var poco0 = CreateDeco();
+                    poco0.id = firstId + startingAmount - 1;
                     var poco1 = CreateDeco();
-                    poco1.id = id + 1;
-                    var poco2 = CreateDeco();
-                    poco2.id = poco1.id + 1;
-                    var pocoList = new List<deco>() { poco1, poco2 };
-                    await db.BulkInsert("#AsyncPocoTemp", "id", false, pocoList);
+                    poco1.id = firstId + startingAmount;
+                    var pocoList = new List<deco>() { poco0, poco1 };
+                    await db.BulkInsertAsync(pocoList);
                     scope.Complete();
                 }
                 catch(SqlException exception)
