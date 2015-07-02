@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Reflection;
+﻿using System.Reflection;
 
 namespace AsyncPoco
 {
@@ -43,6 +39,16 @@ namespace AsyncPoco
 			get;
 			set;
 		}
+
+        /// <summary>
+        /// True if this column is an identity and shouldn't be used in Insert operations.
+        /// The column will be included in Select operations by default.
+        /// </summary>
+        public bool IdentityColumn
+        {
+            get;
+            set;
+        }
 
 		/// <summary>
 		/// True if time and date values returned through this column should be forced to UTC DateTimeKind. (no conversion is applied - the Kind of the DateTime property
@@ -90,6 +96,8 @@ namespace AsyncPoco
 					ci.ResultColumn = true;
 				if ((colattr as ComputedColumnAttribute) != null)
 					ci.ComputedColumn = true;
+                if ((colattr as IdentityColumnAttribute) != null)
+                    ci.IdentityColumn = true;
 
 			}
 			else
@@ -98,6 +106,7 @@ namespace AsyncPoco
 				ci.ForceToUtc = false;
 				ci.ResultColumn = false;
 				ci.ComputedColumn = false;
+			    ci.IdentityColumn = false;
 			}
 
 			return ci;

@@ -1138,7 +1138,8 @@ namespace AsyncPoco
 			var mergePrimaryKeyPart = getPrimaryKeyPartOfMerge(primaryKeyValues);
 			var targetTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "");
 			var sourceTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "S.");
-			var query = @"MERGE
+			//prefix with ";" to prevent autoselect clause
+			var query = @";MERGE
 							INTO " + targetTable + @" AS T 
 							USING " + sourceTable + @" AS S 
 							ON" + mergePrimaryKeyPart +
@@ -1153,6 +1154,8 @@ namespace AsyncPoco
 			var columnList = "";
 			foreach (var column in columns)
 			{
+				if(column.Value.IdentityColumn)
+					continue;
 				columnList += columnPrefix + "[" + column.Key + "]" + ",";
 			}
 			return columnList.TrimEnd(',');
@@ -1244,7 +1247,6 @@ namespace AsyncPoco
 		/// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
 		public async Task<int> BulkInsert(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
 		{
-			int totalInserted = 0;
 			try
 			{
 				await OpenSharedConnectionAsync();
@@ -1257,7 +1259,7 @@ namespace AsyncPoco
 						var names = new List<string>();
 						foreach (var i in pd.Columns)
 						{
-							// Don't insert result columns
+							// Don't insert result columns or identity columns
 							if (i.Value.ResultColumn)
 								continue;
 
@@ -1278,6 +1280,7 @@ namespace AsyncPoco
 
 						var values = new List<string>();
 						int count = 0;
+						int totalInserted = 0;
 						do
 						{
 							cmd.CommandText = "";
@@ -1289,7 +1292,8 @@ namespace AsyncPoco
 								foreach (var i in pd.Columns)
 								{
 									// Don't insert result columns
-									if (i.Value.ResultColumn) continue;
+									if (i.Value.ResultColumn)
+										continue;
 
 									// Don't insert the primary key (except under oracle where we need bring in the next sequence value)
 									if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
@@ -1320,10 +1324,11 @@ namespace AsyncPoco
 							if (cmd.CommandText == "") break;
 							count += batchSize;
 							DoPreExecute(cmd);
-							totalInserted += cmd.ExecuteNonQuery();
+							totalInserted += await cmd.ExecuteNonQueryAsync();
 							OnExecutedCommand(cmd);
 						}
 						while (true);
+						return totalInserted;
 					}
 				}
 				finally
@@ -1335,8 +1340,8 @@ namespace AsyncPoco
 			{
 				if (OnException(x))
 					throw;
+				return -1;
 			}
-			return totalInserted;
 		}
 
 		/// <summary>
@@ -2800,6 +2805,25 @@ namespace AsyncPoco
 	{
 	}
 
+
+	/// <summary>
+	/// Marks a poco property as an identity column.
+	/// Not used on inserts
+	/// </summary>
+	[AttributeUsage(AttributeTargets.Property)]
+	public class IdentityColumnAttribute : ColumnAttribute
+	{
+		public IdentityColumnAttribute()
+		{
+		}
+
+		public IdentityColumnAttribute(string name)
+			: base(name)
+		{
+		}
+	}
+
+
 	/// <summary>
 	/// Use the Ignore attribute on POCO class properties that shouldn't be mapped
 	/// by AsyncPoco.
@@ -2946,6 +2970,16 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
+		/// True if this column is an identity and shouldn't be used in Insert operations.
+		/// The column will be included in Select operations by default.
+		/// </summary>
+		public bool IdentityColumn
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
 		/// True if time and date values returned through this column should be forced to UTC DateTimeKind. (no conversion is applied - the Kind of the DateTime property
 		/// is simply set to DateTimeKind.Utc instead of DateTimeKind.Unknown.
 		/// </summary>
@@ -2991,6 +3025,8 @@ namespace AsyncPoco
 					ci.ResultColumn = true;
 				if ((colattr as ComputedColumnAttribute) != null)
 					ci.ComputedColumn = true;
+				if ((colattr as IdentityColumnAttribute) != null)
+					ci.IdentityColumn = true;
 
 			}
 			else
@@ -2999,6 +3035,7 @@ namespace AsyncPoco
 				ci.ForceToUtc = false;
 				ci.ResultColumn = false;
 				ci.ComputedColumn = false;
+				ci.IdentityColumn = false;
 			}
 
 			return ci;
@@ -3946,6 +3983,7 @@ namespace AsyncPoco
 			public PropertyInfo PropertyInfo;
 			public bool ResultColumn;
 			public bool ComputedColumn;
+			public bool IdentityColumn;
 			public bool ForceToUtc;
 			public virtual void SetValue(object target, object val) { PropertyInfo.SetValue(target, val, null); }
 			public virtual object GetValue(object target) { return PropertyInfo.GetValue(target, null); }
@@ -4015,6 +4053,7 @@ namespace AsyncPoco
 					pc.ColumnName = ci.ColumnName;
 					pc.ResultColumn = ci.ResultColumn;
 					pc.ComputedColumn = ci.ComputedColumn;
+					pc.IdentityColumn = ci.IdentityColumn;
 					pc.ForceToUtc = ci.ForceToUtc;
 
 					// Store it

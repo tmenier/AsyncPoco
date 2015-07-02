@@ -30,17 +30,17 @@ namespace AsyncPoco.Tests
 		public async Task CreateDbAsync()
 		{
 			db = new Database(_connectionStringName);
-            //var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName));
-            //foreach(var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
-            //    await db.ExecuteAsync(sql);
+            var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName));
+            foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
+                await db.ExecuteAsync(sql);
 		}
 
 		[TestFixtureTearDown]
 		public async Task DeleteDbAsync()
 		{
-            //var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName));
-            //foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
-            //    await db.ExecuteAsync(sql);
+            var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName));
+            foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
+                await db.ExecuteAsync(sql);
 		}
 
 		Task<long> GetRecordCountAsync()
@@ -938,23 +938,23 @@ namespace AsyncPoco.Tests
         [Test]
         public async Task MergeTablesTransactionCommits()
         {
-            var database = new Database(_connectionStringName);
-            var id = await InsertRecordsAsync(10, database);
             var totalMerged = 0;
             using (var scope = await db.GetTransactionAsync())
             {
+                var startingAmount = 10;
+                var firstId = await InsertRecordsAsync(startingAmount);
                 await db.ExecuteAsync(@"select top 0 * into #AsyncPocoTemp from petapoco");
                 await db.ExecuteAsync(@"set identity_insert #AsyncPocoTemp on");
                 var poco0 = CreateDeco();
-                poco0.id = id - 1;
+                poco0.id = firstId + startingAmount - 1;
                 var poco1 = CreateDeco();
-                poco1.id = id + 1;
+                poco1.id = firstId + startingAmount;
                 var poco2 = CreateDeco();
-                poco2.id = poco1.id + 1;
+                poco2.id = firstId + startingAmount + 1;
                 var pocoList = new List<deco>() { poco0, poco1, poco2 };
                 var merged = await db.MergeInsertOnly<deco>(pocoList, "#AsyncPocoTemp");
-                totalMerged = merged.Count;
                 scope.Complete();
+                totalMerged = merged.Count;
             }
             Assert.AreEqual(2, totalMerged);
         }

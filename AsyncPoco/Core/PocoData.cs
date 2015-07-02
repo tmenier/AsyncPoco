@@ -75,6 +75,7 @@ namespace AsyncPoco.Internal
 				pc.ColumnName = ci.ColumnName;
 				pc.ResultColumn = ci.ResultColumn;
 				pc.ComputedColumn = ci.ComputedColumn;
+			    pc.IdentityColumn = ci.IdentityColumn;
 				pc.ForceToUtc = ci.ForceToUtc;
 
 				// Store it

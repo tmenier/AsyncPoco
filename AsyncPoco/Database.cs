@@ -1129,7 +1129,8 @@ namespace AsyncPoco
             var mergePrimaryKeyPart = getPrimaryKeyPartOfMerge(primaryKeyValues);
             var targetTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "");
             var sourceTableColumns = getCommaSeparatedColumns(targetPocoData.Columns, "S.");
-            var query = @"MERGE
+            //prefix with ";" to prevent autoselect clause
+            var query = @";MERGE
                             INTO " + targetTable + @" AS T 
                             USING " + sourceTable + @" AS S 
                             ON" + mergePrimaryKeyPart +
@@ -1144,6 +1145,8 @@ namespace AsyncPoco
             var columnList = "";
             foreach (var column in columns)
             {
+                if(column.Value.IdentityColumn)
+                    continue;
                 columnList += columnPrefix + "[" + column.Key + "]" + ",";
             }
             return columnList.TrimEnd(',');
@@ -1235,7 +1238,6 @@ namespace AsyncPoco
         /// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
         public async Task<int> BulkInsert(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
         {
-            int totalInserted = 0;
             try
             {
                 await OpenSharedConnectionAsync();
@@ -1248,7 +1250,7 @@ namespace AsyncPoco
                         var names = new List<string>();
                         foreach (var i in pd.Columns)
                         {
-                            // Don't insert result columns
+                            // Don't insert result columns or identity columns
                             if (i.Value.ResultColumn)
                                 continue;
 
@@ -1269,6 +1271,7 @@ namespace AsyncPoco
 
                         var values = new List<string>();
                         int count = 0;
+                        int totalInserted = 0;
                         do
                         {
                             cmd.CommandText = "";
@@ -1280,7 +1283,8 @@ namespace AsyncPoco
                                 foreach (var i in pd.Columns)
                                 {
                                     // Don't insert result columns
-                                    if (i.Value.ResultColumn) continue;
+                                    if (i.Value.ResultColumn)
+                                        continue;
 
                                     // Don't insert the primary key (except under oracle where we need bring in the next sequence value)
                                     if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
@@ -1311,10 +1315,11 @@ namespace AsyncPoco
                             if (cmd.CommandText == "") break;
                             count += batchSize;
                             DoPreExecute(cmd);
-                            totalInserted += cmd.ExecuteNonQuery();
+                            totalInserted += await cmd.ExecuteNonQueryAsync();
                             OnExecutedCommand(cmd);
                         }
                         while (true);
+                        return totalInserted;
                     }
                 }
                 finally
@@ -1326,8 +1331,8 @@ namespace AsyncPoco
             {
                 if (OnException(x))
                     throw;
+                return -1;
             }
-            return totalInserted;
         }
 
         /// <summary>
