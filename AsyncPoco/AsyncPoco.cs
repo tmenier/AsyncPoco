@@ -1117,11 +1117,11 @@ namespace AsyncPoco
 		/// <param name="pocos">The pocos you need to mass insert</param>
 		/// <param name="tempTableName">The name of the temporary table used in the merge</param>
 		/// <returns>Returns the pocos successfully inserted.</returns>
-		public async Task<List<T>> MergeInsertOnly<T>(IEnumerable<object> pocos)
+		public async Task<List<T>> MergeInsertOnly<T>(IEnumerable<T> pocos, int batchSize = 25)
 		{
-			var pocoData = getPocoData(pocos);
+			var pocoData = PocoData.ForType(typeof(T));
 			createTempTable(pocoData.TableInfo.TableName);
-			await populateTempTable(tempTable, pocos);
+			await populateTempTable(tempTable, pocos, batchSize);
 			return await mergeTablesInsertOnly<T>(tempTable, pocoData);
 		}
 
@@ -1144,11 +1144,11 @@ namespace AsyncPoco
 			await ExecuteAsync(@"set identity_insert " + tempTable + " on");
 		}
 
-		private async Task<int> populateTempTable(string tempTable, IEnumerable<object> pocos)
+		private async Task<int> populateTempTable<T>(string tempTable, IEnumerable<T> pocos, int batchSize = 25)
 		{
 			var pocoData = getPocoData(pocos);
 			var primaryKeyName = pocoData.TableInfo.PrimaryKey;
-			return await BulkInsertWithIdentitiesAsync(tempTable, primaryKeyName, false, pocos);
+			return await BulkInsertWithIdentitiesAsync(tempTable, primaryKeyName, false, pocos, batchSize);
 		}
 
 		private async Task<List<T>> mergeTablesInsertOnly<T>(string sourceTable, PocoData targetPocoData)
@@ -1359,7 +1359,7 @@ namespace AsyncPoco
 		/// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
 		/// <param name="pocos">The POCO objects that specifies the column values to be inserted</param>
 		/// <param name="batchSize">The number of POCOS to be grouped together for each database rounddtrip</param>        
-		public async Task<int> BulkInsertWithIdentitiesAsync(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<object> pocos, int batchSize = 25)
+		public async Task<int> BulkInsertWithIdentitiesAsync<T>(string tableName, string primaryKeyName, bool autoIncrement, IEnumerable<T> pocos, int batchSize = 25)
 		{
 			try
 			{
