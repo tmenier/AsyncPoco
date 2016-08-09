@@ -24,6 +24,8 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics;
+using System.Dynamic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -36,34 +38,62 @@ using System.Threading.Tasks;
 namespace AsyncPoco
 {
 	/// <summary>
-	/// The main Database class.  You can either use this class directly, or derive from it.
+	///     The main Database class.  You can either use this class directly, or derive from it.
 	/// </summary>
-	public class Database : IDisposable
+	public class Database : IDatabase
 	{
-		#region Constructors
+		private static IEqualityComparer<string> _columnComparer = StringComparer.InvariantCultureIgnoreCase;
+		public static IEqualityComparer<string> ColumnComparer
+		{
+			get { return _columnComparer; }
+			set
+			{
+				_columnComparer = value;
+				MultiPocoFactory.FieldNameComparer = value;
+				PocoData.ColumnComparer = value;
+				EnumMapper.FieldComparer = value;
+			}
+		}
+
+		#region IDisposable
+
 		/// <summary>
-		/// Construct a database using a supplied DbConnection
+		///     Automatically close one open shared connection
+		/// </summary>
+		public void Dispose()
+		{
+			// Automatically close one open connection reference
+			//  (Works with KeepConnectionAlive and manually opening a shared connection)
+			CloseSharedConnection();
+		}
+
+		#endregion
+
+		#region Constructors
+
+		/// <summary>
+		///     Construct a database using a supplied DbConnection
 		/// </summary>
 		/// <param name="connection">The DbConnection to use</param>
 		/// <remarks>
-		/// The supplied DbConnection will not be closed/disposed by PetaPoco - that remains
-		/// the responsibility of the caller.
+		///     The supplied DbConnection will not be closed/disposed by PetaPoco - that remains
+		///     the responsibility of the caller.
 		/// </remarks>
 		public Database(DbConnection connection)
 		{
 			_sharedConnection = connection;
 			_connectionString = connection.ConnectionString;
-			_sharedConnectionDepth = 2;		// Prevent closing external connection
+			_sharedConnectionDepth = 2; // Prevent closing external connection
 			CommonConstruct();
 		}
 
 		/// <summary>
-		/// Construct a database using a supplied connections string and optionally a provider name
+		///     Construct a database using a supplied connections string and optionally a provider name
 		/// </summary>
 		/// <param name="connectionString">The DB connection string</param>
 		/// <param name="providerName">The name of the DB provider to use</param>
 		/// <remarks>
-		/// PetaPoco will automatically close and dispose any connections it creates.
+		///     PetaPoco will automatically close and dispose any connections it creates.
 		/// </remarks>
 		public Database(string connectionString, string providerName)
 		{
@@ -73,7 +103,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Construct a Database using a supplied connection string and a DbProviderFactory
+		///     Construct a Database using a supplied connection string and a DbProviderFactory
 		/// </summary>
 		/// <param name="connectionString">The connection string to use</param>
 		/// <param name="provider">The DbProviderFactory to use for instantiating DbConnection's</param>
@@ -85,8 +115,8 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Construct a Database using a supplied connectionString Name.  The actual connection string and provider will be 
-		/// read from app/web.config.
+		///     Construct a Database using a supplied connectionString Name.  The actual connection string and provider will be
+		///     read from app/web.config.
 		/// </summary>
 		/// <param name="connectionStringName">The name of the connection</param>
 		public Database(string connectionStringName)
@@ -114,7 +144,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Provides common initialization for the various constructors
+		///     Provides common initialization for the various constructors
 		/// </summary>
 		private void CommonConstruct()
 		{
@@ -128,7 +158,7 @@ namespace AsyncPoco
 				_factory = DbProviderFactories.GetFactory(_providerName);
 
 			// Resolve the DB Type
-			string DBTypeName = (_factory == null ? _sharedConnection.GetType() : _factory.GetType()).Name;
+			var DBTypeName = (_factory == null ? _sharedConnection.GetType() : _factory.GetType()).Name;
 			_dbType = DatabaseType.Resolve(DBTypeName, _providerName);
 
 			// What character is used for delimiting parameters in SQL
@@ -137,33 +167,18 @@ namespace AsyncPoco
 
 		#endregion
 
-		#region IDisposable
-		/// <summary>
-		/// Automatically close one open shared connection 
-		/// </summary>
-		public void Dispose()
-		{
-			// Automatically close one open connection reference
-			//  (Works with KeepConnectionAlive and manually opening a shared connection)
-			CloseSharedConnection();
-		}
-		#endregion
-
 		#region Connection Management
-		/// <summary>
-		/// When set to true the first opened connection is kept alive until this object is disposed
-		/// </summary>
-		public bool KeepConnectionAlive 
-		{ 
-			get; 
-			set; 
-		}
 
 		/// <summary>
-		/// Open a connection that will be used for all subsequent queries.
+		///     When set to true the first opened connection is kept alive until this object is disposed
+		/// </summary>
+		public bool KeepConnectionAlive { get; set; }
+
+		/// <summary>
+		///     Open a connection that will be used for all subsequent queries.
 		/// </summary>
 		/// <remarks>
-		/// Calls to Open/CloseSharedConnection are reference counted and should be balanced
+		///     Calls to Open/CloseSharedConnection are reference counted and should be balanced
 		/// </remarks>
 		public virtual async Task OpenSharedConnectionAsync()
 		{
@@ -181,13 +196,13 @@ namespace AsyncPoco
 				_sharedConnection = OnConnectionOpened(_sharedConnection);
 
 				if (KeepConnectionAlive)
-					_sharedConnectionDepth++;		// Make sure you call Dispose
+					_sharedConnectionDepth++; // Make sure you call Dispose
 			}
 			_sharedConnectionDepth++;
 		}
 
 		/// <summary>
-		/// Releases the shared connection
+		///     Releases the shared connection
 		/// </summary>
 		public void CloseSharedConnection()
 		{
@@ -204,7 +219,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Provides access to the currently open shared connection (or null if none)
+		///     Provides access to the currently open shared connection (or null if none)
 		/// </summary>
 		public IDbConnection Connection
 		{
@@ -214,28 +229,25 @@ namespace AsyncPoco
 		#endregion
 
 		#region Transaction Management
+
 		// Helper to create a transaction scope
 
 		/// <summary>
-		/// Starts or continues a transaction.
+		///     Starts or continues a transaction.
 		/// </summary>
 		/// <returns>An ITransaction reference that must be Completed or disposed</returns>
 		/// <remarks>
-		/// This method makes management of calls to Begin/End/CompleteTransaction easier.  
-		/// 
-		/// The usage pattern for this should be:
-		/// 
-		/// using (var tx = db.GetTransaction())
-		/// {
-		///		// Do stuff
-		///		db.Update(...);
-		///		
+		///     This method makes management of calls to Begin/End/CompleteTransaction easier.
+		///     The usage pattern for this should be:
+		///     using (var tx = db.GetTransaction())
+		///     {
+		///     // Do stuff
+		///     db.Update(...);
 		///     // Mark the transaction as complete
 		///     tx.Complete();
-		/// }
-		/// 
-		/// Transactions can be nested but they must all be completed otherwise the entire
-		/// transaction is aborted.
+		///     }
+		///     Transactions can be nested but they must all be completed otherwise the entire
+		///     transaction is aborted.
 		/// </remarks>
 		public Task<ITransaction> GetTransactionAsync()
 		{
@@ -243,22 +255,22 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Called when a transaction starts.  Overridden by the T4 template generated database
-		/// classes to ensure the same DB instance is used throughout the transaction.
+		///     Called when a transaction starts.  Overridden by the T4 template generated database
+		///     classes to ensure the same DB instance is used throughout the transaction.
 		/// </summary>
-		public virtual void OnBeginTransaction() 
-		{ 
+		public virtual void OnBeginTransaction()
+		{
 		}
 
 		/// <summary>
-		/// Called when a transaction ends.
+		///     Called when a transaction ends.
 		/// </summary>
-		public virtual void OnEndTransaction() 
-		{ 
+		public virtual void OnEndTransaction()
+		{
 		}
 
 		/// <summary>
-		/// Starts a transaction scope, see GetTransaction() for recommended usage
+		///     Starts a transaction scope, see GetTransaction() for recommended usage
 		/// </summary>
 		public virtual async Task BeginTransactionAsync()
 		{
@@ -271,11 +283,10 @@ namespace AsyncPoco
 				_transactionCancelled = false;
 				OnBeginTransaction();
 			}
-
 		}
 
 		/// <summary>
-		/// Internal helper to cleanup transaction
+		///     Internal helper to cleanup transaction
 		/// </summary>
 		protected virtual void CleanupTransaction()
 		{
@@ -293,38 +304,39 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Aborts the entire outer most transaction scope 
+		///     Aborts the entire outer most transaction scope
 		/// </summary>
 		/// <remarks>
-		/// Called automatically by Transaction.Dispose()
-		/// if the transaction wasn't completed.
+		///     Called automatically by Transaction.Dispose()
+		///     if the transaction wasn't completed.
 		/// </remarks>
 		public void AbortTransaction()
 		{
 			_transactionCancelled = true;
-			if ((--_transactionDepth) == 0)
+			if (--_transactionDepth == 0)
 				CleanupTransaction();
 		}
 
 		/// <summary>
-		/// Marks the current transaction scope as complete.
+		///     Marks the current transaction scope as complete.
 		/// </summary>
 		public void CompleteTransaction()
 		{
-			if ((--_transactionDepth) == 0)
+			if (--_transactionDepth == 0)
 				CleanupTransaction();
 		}
 
 		#endregion
 
 		#region Command Management
+
 		/// <summary>
-		/// Add a parameter to a DB command
+		///     Add a parameter to a DB command
 		/// </summary>
 		/// <param name="cmd">A reference to the IDbCommand to which the parameter is to be added</param>
 		/// <param name="value">The value to assign to the parameter</param>
 		/// <param name="pi">Optional, a reference to the property info of the POCO property from which the value is coming.</param>
-		void AddParam(IDbCommand cmd, object value, PropertyInfo pi)
+		private void AddParam(IDbCommand cmd, object value, PropertyInfo pi)
 		{
 			// Convert value to from poco type to db type
 			if (pi != null)
@@ -359,7 +371,7 @@ namespace AsyncPoco
 				value = _dbType.MapParameterValue(value);
 
 				var t = value.GetType();
-				if (t.IsEnum)		// PostgreSQL .NET driver wont cast enum to int
+				if (t.IsEnum) // PostgreSQL .NET driver wont cast enum to int
 				{
 					p.Value = (int)value;
 				}
@@ -373,9 +385,9 @@ namespace AsyncPoco
 				{
 					// out of memory exception occurs if trying to save more than 4000 characters to SQL Server CE NText column. Set before attempting to set Size, or Size will always max out at 4000
 					if ((value as string).Length + 1 > 4000 && p.GetType().Name == "SqlCeParameter")
-						p.GetType().GetProperty("SqlDbType").SetValue(p, SqlDbType.NText, null); 
+						p.GetType().GetProperty("SqlDbType").SetValue(p, SqlDbType.NText, null);
 
-					p.Size = Math.Max((value as string).Length + 1, 4000);		// Help query plan caching by using common size
+					p.Size = Math.Max((value as string).Length + 1, 4000); // Help query plan caching by using common size
 					p.Value = value;
 				}
 				else if (t == typeof(AnsiString))
@@ -387,7 +399,8 @@ namespace AsyncPoco
 				}
 				else if (value.GetType().Name == "SqlGeography") //SqlGeography is a CLR Type
 				{
-					p.GetType().GetProperty("UdtTypeName").SetValue(p, "geography", null); //geography is the equivalent SQL Server Type
+					p.GetType().GetProperty("UdtTypeName").SetValue(p, "geography", null);
+					//geography is the equivalent SQL Server Type
 					p.Value = value;
 				}
 
@@ -407,7 +420,8 @@ namespace AsyncPoco
 		}
 
 		// Create a command
-		static Regex rxParamsPrefix = new Regex(@"(?<!@)@\w+", RegexOptions.Compiled);
+		private static readonly Regex rxParamsPrefix = new Regex(@"(?<!@)@\w+", RegexOptions.Compiled);
+
 		public DbCommand CreateCommand(DbConnection connection, string sql, params object[] args)
 		{
 			// Perform named argument replacements
@@ -421,7 +435,7 @@ namespace AsyncPoco
 			// Perform parameter prefix replacements
 			if (_paramPrefix != "@")
 				sql = rxParamsPrefix.Replace(sql, m => _paramPrefix + m.Value.Substring(1));
-			sql = sql.Replace("@@", "@");		   // <- double @@ escapes a single @
+			sql = sql.Replace("@@", "@"); // <- double @@ escapes a single @
 
 			// Create the command and add parameters
 			var cmd = connection.CreateCommand();
@@ -437,74 +451,76 @@ namespace AsyncPoco
 			_dbType.PreExecute(cmd);
 
 			// Call logging
-			if (!String.IsNullOrEmpty(sql))
+			if (!string.IsNullOrEmpty(sql))
 				DoPreExecute(cmd);
 
 			return cmd;
 		}
+
 		#endregion
 
 		#region Exception Reporting and Logging
 
 		/// <summary>
-		/// Called if an exception occurs during processing of a DB operation.  Override to provide custom logging/handling.
+		///     Called if an exception occurs during processing of a DB operation.  Override to provide custom logging/handling.
 		/// </summary>
 		/// <param name="x">The exception instance</param>
 		/// <returns>True to re-throw the exception, false to suppress it</returns>
 		public virtual bool OnException(Exception x)
 		{
-			System.Diagnostics.Debug.WriteLine(x.ToString());
-			System.Diagnostics.Debug.WriteLine(LastCommand);
+			Debug.WriteLine(x.ToString());
+			Debug.WriteLine(LastCommand);
 			return true;
 		}
 
 		/// <summary>
-		/// Called when DB connection opened
+		///     Called when DB connection opened
 		/// </summary>
 		/// <param name="conn">The newly opened DbConnection</param>
 		/// <returns>The same or a replacement DbConnection</returns>
 		/// <remarks>
-		/// Override this method to provide custom logging of opening connection, or
-		/// to provide a proxy DbConnection.
+		///     Override this method to provide custom logging of opening connection, or
+		///     to provide a proxy DbConnection.
 		/// </remarks>
-		public virtual DbConnection OnConnectionOpened(DbConnection conn) 
-		{ 
-			return conn; 
+		public virtual DbConnection OnConnectionOpened(DbConnection conn)
+		{
+			return conn;
 		}
 
 		/// <summary>
-		/// Called when DB connection closed
+		///     Called when DB connection closed
 		/// </summary>
 		/// <param name="conn">The soon to be closed IDBConnection</param>
-		public virtual void OnConnectionClosing(IDbConnection conn) 
-		{ 
+		public virtual void OnConnectionClosing(IDbConnection conn)
+		{
 		}
 
 		/// <summary>
-		/// Called just before an DB command is executed
+		///     Called just before an DB command is executed
 		/// </summary>
 		/// <param name="cmd">The command to be executed</param>
 		/// <remarks>
-		/// Override this method to provide custom logging of commands and/or
-		/// modification of the IDbCommand before it's executed
+		///     Override this method to provide custom logging of commands and/or
+		///     modification of the IDbCommand before it's executed
 		/// </remarks>
-		public virtual void OnExecutingCommand(IDbCommand cmd) 
-		{ 
+		public virtual void OnExecutingCommand(IDbCommand cmd)
+		{
 		}
 
 		/// <summary>
-		/// Called on completion of command execution
+		///     Called on completion of command execution
 		/// </summary>
 		/// <param name="cmd">The IDbCommand that finished executing</param>
-		public virtual void OnExecutedCommand(IDbCommand cmd) 
-		{ 
+		public virtual void OnExecutedCommand(IDbCommand cmd)
+		{
 		}
 
 		#endregion
 
 		#region operation: Execute 
+
 		/// <summary>
-		/// Executes a non-query command
+		///     Executes a non-query command
 		/// </summary>
 		/// <param name="sql">The SQL statement to execute</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
@@ -537,7 +553,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Executes a non-query command
+		///     Executes a non-query command
 		/// </summary>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>The number of rows affected</returns>
@@ -551,7 +567,7 @@ namespace AsyncPoco
 		#region operation: ExecuteScalarAsync
 
 		/// <summary>
-		/// Executes a query and return the first column of the first row in the result set.
+		///     Executes a query and return the first column of the first row in the result set.
 		/// </summary>
 		/// <typeparam name="T">The type that the result value should be cast to</typeparam>
 		/// <param name="sql">The SQL query to execute</param>
@@ -566,12 +582,12 @@ namespace AsyncPoco
 				{
 					using (var cmd = CreateCommand(_sharedConnection, sql, args))
 					{
-						object val = await cmd.ExecuteScalarAsync();
+						var val = await cmd.ExecuteScalarAsync();
 						OnExecutedCommand(cmd);
 
 						// Handle nullable types
-						Type u = Nullable.GetUnderlyingType(typeof(T));
-						if (u != null && val == null) 
+						var u = Nullable.GetUnderlyingType(typeof(T));
+						if (u != null && val == null)
 							return default(T);
 
 						return (T)Convert.ChangeType(val, u ?? typeof(T));
@@ -591,7 +607,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Executes a query and return the first column of the first row in the result set.
+		///     Executes a query and return the first column of the first row in the result set.
 		/// </summary>
 		/// <typeparam name="T">The type that the result value should be cast to</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
@@ -606,7 +622,7 @@ namespace AsyncPoco
 		#region operation: Fetch
 
 		/// <summary>
-		/// Runs a query and returns the result set as a typed list
+		///     Runs a query and returns the result set as a typed list
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query to execute</param>
@@ -620,12 +636,12 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Runs a query and returns the result set as a typed list
+		///     Runs a query and returns the result set as a typed list
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>A List holding the results of the query</returns>
-		public Task<List<T>> FetchAsync<T>(Sql sql) 
+		public Task<List<T>> FetchAsync<T>(Sql sql)
 		{
 			return FetchAsync<T>(sql.SQL, sql.Arguments);
 		}
@@ -635,8 +651,8 @@ namespace AsyncPoco
 		#region operation: Page
 
 		/// <summary>
-		/// Starting with a regular SELECT statement, derives the SQL statements required to query a 
-		/// DB for a page of records and the total number of records
+		///     Starting with a regular SELECT statement, derives the SQL statements required to query a
+		///     DB for a page of records and the total number of records
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="skip">The number of rows to skip before the start of the page</param>
@@ -645,7 +661,8 @@ namespace AsyncPoco
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="sqlCount">Outputs the SQL statement to query for the total number of matching rows</param>
 		/// <param name="sqlPage">Outputs the SQL statement to retrieve a single page of matching rows</param>
-		void BuildPageQueries<T>(long skip, long take, string sql, ref object[] args, out string sqlCount, out string sqlPage) 
+		private void BuildPageQueries<T>(long skip, long take, string sql, ref object[] args, out string sqlCount,
+			out string sqlPage)
 		{
 			// Add auto select clause
 			if (EnableAutoSelect)
@@ -661,7 +678,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Retrieves a page of records	and the total number of available records
+		///     Retrieves a page of records	and the total number of available records
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="page">The 1 based page number to retrieve</param>
@@ -672,10 +689,12 @@ namespace AsyncPoco
 		/// <param name="pageArgs">Arguments to any embedded parameters in the sqlPage statement</param>
 		/// <returns>A Page of results</returns>
 		/// <remarks>
-		/// This method allows separate SQL statements to be explicitly provided for the two parts of the page query.
-		/// The page and itemsPerPage parameters are not used directly and are used simply to populate the returned Page object.
+		///     This method allows separate SQL statements to be explicitly provided for the two parts of the page query.
+		///     The page and itemsPerPage parameters are not used directly and are used simply to populate the returned Page
+		///     object.
 		/// </remarks>
-		public async Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, string sqlCount, object[] countArgs, string sqlPage, object[] pageArgs)
+		public async Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, string sqlCount, object[] countArgs,
+			string sqlPage, object[] pageArgs)
 		{
 			// Save the one-time command time out and use it for both queries
 			var saveTimeout = OneTimeCommandTimeout;
@@ -689,7 +708,7 @@ namespace AsyncPoco
 			};
 			result.TotalPages = result.TotalItems / itemsPerPage;
 
-			if ((result.TotalItems % itemsPerPage) != 0)
+			if (result.TotalItems % itemsPerPage != 0)
 				result.TotalPages++;
 
 			OneTimeCommandTimeout = saveTimeout;
@@ -701,9 +720,8 @@ namespace AsyncPoco
 			return result;
 		}
 
-
 		/// <summary>
-		/// Retrieves a page of records	and the total number of available records
+		///     Retrieves a page of records	and the total number of available records
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="page">The 1 based page number to retrieve</param>
@@ -712,19 +730,19 @@ namespace AsyncPoco
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <returns>A Page of results</returns>
 		/// <remarks>
-		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
-		/// records for the specified page.  It will also execute a second query to retrieve the
-		/// total number of records in the result set.
+		///     PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		///     records for the specified page.  It will also execute a second query to retrieve the
+		///     total number of records in the result set.
 		/// </remarks>
-		public Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, string sql, params object[] args) 
+		public Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, string sql, params object[] args)
 		{
 			string sqlCount, sqlPage;
-			BuildPageQueries<T>((page-1)*itemsPerPage, itemsPerPage, sql, ref args, out sqlCount, out sqlPage);
+			BuildPageQueries<T>((page - 1) * itemsPerPage, itemsPerPage, sql, ref args, out sqlCount, out sqlPage);
 			return PageAsync<T>(page, itemsPerPage, sqlCount, args, sqlPage, args);
 		}
 
 		/// <summary>
-		/// Retrieves a page of records	and the total number of available records
+		///     Retrieves a page of records	and the total number of available records
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="page">The 1 based page number to retrieve</param>
@@ -732,9 +750,9 @@ namespace AsyncPoco
 		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
 		/// <returns>A Page of results</returns>
 		/// <remarks>
-		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
-		/// records for the specified page.  It will also execute a second query to retrieve the
-		/// total number of records in the result set.
+		///     PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		///     records for the specified page.  It will also execute a second query to retrieve the
+		///     total number of records in the result set.
 		/// </remarks>
 		public Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, Sql sql)
 		{
@@ -742,7 +760,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Retrieves a page of records	and the total number of available records
+		///     Retrieves a page of records	and the total number of available records
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="page">The 1 based page number to retrieve</param>
@@ -751,8 +769,9 @@ namespace AsyncPoco
 		/// <param name="sqlPage">An SQL builder object representing the SQL to retrieve a single page of results</param>
 		/// <returns>A Page of results</returns>
 		/// <remarks>
-		/// This method allows separate SQL statements to be explicitly provided for the two parts of the page query.
-		/// The page and itemsPerPage parameters are not used directly and are used simply to populate the returned Page object.
+		///     This method allows separate SQL statements to be explicitly provided for the two parts of the page query.
+		///     The page and itemsPerPage parameters are not used directly and are used simply to populate the returned Page
+		///     object.
 		/// </remarks>
 		public Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, Sql sqlCount, Sql sqlPage)
 		{
@@ -764,7 +783,7 @@ namespace AsyncPoco
 		#region operation: Fetch (page)
 
 		/// <summary>
-		/// Retrieves a page of records (without the total count)
+		///     Retrieves a page of records (without the total count)
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="page">The 1 based page number to retrieve</param>
@@ -773,8 +792,8 @@ namespace AsyncPoco
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <returns>A List of results</returns>
 		/// <remarks>
-		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
-		/// records for the specified page.
+		///     PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		///     records for the specified page.
 		/// </remarks>
 		public Task<List<T>> FetchAsync<T>(long page, long itemsPerPage, string sql, params object[] args)
 		{
@@ -782,7 +801,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Retrieves a page of records (without the total count)
+		///     Retrieves a page of records (without the total count)
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="page">The 1 based page number to retrieve</param>
@@ -790,8 +809,8 @@ namespace AsyncPoco
 		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
 		/// <returns>A List of results</returns>
 		/// <remarks>
-		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
-		/// records for the specified page.
+		///     PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		///     records for the specified page.
 		/// </remarks>
 		public Task<List<T>> FetchAsync<T>(long page, long itemsPerPage, Sql sql)
 		{
@@ -803,7 +822,7 @@ namespace AsyncPoco
 		#region operation: SkipTakeAsync
 
 		/// <summary>
-		/// Retrieves a range of records from result set
+		///     Retrieves a range of records from result set
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="skip">The number of rows at the start of the result set to skip over</param>
@@ -812,8 +831,8 @@ namespace AsyncPoco
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <returns>A List of results</returns>
 		/// <remarks>
-		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
-		/// records for the specified range.
+		///     PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		///     records for the specified range.
 		/// </remarks>
 		public Task<List<T>> SkipTakeAsync<T>(long skip, long take, string sql, params object[] args)
 		{
@@ -823,7 +842,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Retrieves a range of records from result set
+		///     Retrieves a range of records from result set
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="skip">The number of rows at the start of the result set to skip over</param>
@@ -831,79 +850,84 @@ namespace AsyncPoco
 		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
 		/// <returns>A List of results</returns>
 		/// <remarks>
-		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
-		/// records for the specified range.
+		///     PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		///     records for the specified range.
 		/// </remarks>
 		public Task<List<T>> SkipTakeAsync<T>(long skip, long take, Sql sql)
 		{
 			return SkipTakeAsync<T>(skip, take, sql.SQL, sql.Arguments);
 		}
+
 		#endregion
 
 		#region operation: Query
 
 		/// <summary>
-		/// Runs an SQL query, asynchronously passing each result to a callback
+		///     Runs an SQL query, asynchronously passing each result to a callback
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="action">Callback to process each result</param>
 		/// <remarks>
-		/// For some DB providers, care should be taken to not start a new Query before finishing with
-		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
-		/// returns the results as a List.
+		///     For some DB providers, care should be taken to not start a new Query before finishing with
+		///     and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		///     returns the results as a List.
 		/// </remarks>
-		public Task QueryAsync<T>(string sql, Action<T> action) {
+		public Task QueryAsync<T>(string sql, Action<T> action)
+		{
 			return QueryAsync(sql, null, action);
 		}
 
 		/// <summary>
-		/// Runs an SQL query, asynchronously passing each result to a callback
+		///     Runs an SQL query, asynchronously passing each result to a callback
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="func">Callback to process each result, return false to stop iterating</param>
 		/// <remarks>
-		/// For some DB providers, care should be taken to not start a new Query before finishing with
-		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
-		/// returns the results as a List.
+		///     For some DB providers, care should be taken to not start a new Query before finishing with
+		///     and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		///     returns the results as a List.
 		/// </remarks>
-		public Task QueryAsync<T>(string sql, Func<T, bool> func) {
+		public Task QueryAsync<T>(string sql, Func<T, bool> func)
+		{
 			return QueryAsync(sql, null, func);
 		}
 
 		/// <summary>
-		/// Runs an SQL query, asynchronously passing each result to a callback
+		///     Runs an SQL query, asynchronously passing each result to a callback
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <param name="action">Callback to process each result</param>
 		/// <remarks>
-		/// For some DB providers, care should be taken to not start a new Query before finishing with
-		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
-		/// returns the results as a List.
+		///     For some DB providers, care should be taken to not start a new Query before finishing with
+		///     and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		///     returns the results as a List.
 		/// </remarks>
-		public Task QueryAsync<T>(string sql, object[] args, Action<T> action) {
-			return QueryAsync<T>(sql, args, v => {
+		public Task QueryAsync<T>(string sql, object[] args, Action<T> action)
+		{
+			return QueryAsync<T>(sql, args, v =>
+			{
 				action(v);
 				return true;
 			});
 		}
 
 		/// <summary>
-		/// Runs an SQL query, asynchronously passing each result to a callback
+		///     Runs an SQL query, asynchronously passing each result to a callback
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <param name="func">Callback to process each result, return false to stop iterating</param>
 		/// <remarks>
-		/// For some DB providers, care should be taken to not start a new Query before finishing with
-		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
-		/// returns the results as a List.
+		///     For some DB providers, care should be taken to not start a new Query before finishing with
+		///     and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		///     returns the results as a List.
 		/// </remarks>
-		public virtual async Task QueryAsync<T>(string sql, object[] args, Func<T, bool> func) 
+		public virtual async Task QueryAsync<T>(string sql, object[] args, Func<T, bool> func)
 		{
 			if (EnableAutoSelect)
 				sql = AutoSelectHelper.AddSelectClause<T>(_dbType, sql);
@@ -927,8 +951,10 @@ namespace AsyncPoco
 
 						return;
 					}
-					var factory = pd.GetFactory(cmd.CommandText, _sharedConnection.ConnectionString, 0, r.FieldCount, r) as Func<IDataReader, T>;
-					using (r) {
+					var factory =
+						pd.GetFactory(cmd.CommandText, _sharedConnection.ConnectionString, 0, r.FieldCount, r) as Func<IDataReader, T>;
+					using (r)
+					{
 						var keepGoing = true;
 						while (keepGoing)
 						{
@@ -960,33 +986,33 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Runs an SQL query, asynchronously passing each result to a callback
+		///     Runs an SQL query, asynchronously passing each result to a callback
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
 		/// <param name="action">Callback to process each result</param>
 		/// <remarks>
-		/// For some DB providers, care should be taken to not start a new Query before finishing with
-		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
-		/// returns the results as a List.
+		///     For some DB providers, care should be taken to not start a new Query before finishing with
+		///     and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		///     returns the results as a List.
 		/// </remarks>
-		public Task QueryAsync<T>(Sql sql, Action<T> action) 
+		public Task QueryAsync<T>(Sql sql, Action<T> action)
 		{
 			return QueryAsync(sql.SQL, sql.Arguments, action);
 		}
 
 		/// <summary>
-		/// Runs an SQL query, asynchronously passing each result to a callback
+		///     Runs an SQL query, asynchronously passing each result to a callback
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
 		/// <param name="func">Callback to process each result, return false to stop iterating</param>
 		/// <remarks>
-		/// For some DB providers, care should be taken to not start a new Query before finishing with
-		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
-		/// returns the results as a List.
+		///     For some DB providers, care should be taken to not start a new Query before finishing with
+		///     and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		///     returns the results as a List.
 		/// </remarks>
-		public Task QueryAsync<T>(Sql sql, Func<T, bool> func) 
+		public Task QueryAsync<T>(Sql sql, Func<T, bool> func)
 		{
 			return QueryAsync(sql.SQL, sql.Arguments, func);
 		}
@@ -996,7 +1022,7 @@ namespace AsyncPoco
 		#region operation: Exists
 
 		/// <summary>
-		/// Checks for the existance of a row matching the specified condition
+		///     Checks for the existance of a row matching the specified condition
 		/// </summary>
 		/// <typeparam name="T">The Type representing the table being queried</typeparam>
 		/// <param name="sqlCondition">The SQL expression to be tested for (ie: the WHERE expression)</param>
@@ -1010,12 +1036,13 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Checks for the existance of a row with the specified primary key value.
+		///     Checks for the existance of a row with the specified primary key value.
 		/// </summary>
 		/// <typeparam name="T">The Type representing the table being queried</typeparam>
 		/// <param name="primaryKey">The primary key value to look for</param>
 		/// <returns>True if a record with the specified primary key value exists.</returns>
-		public Task<bool> ExistsAsync<T>(object primaryKey) {
+		public Task<bool> ExistsAsync<T>(object primaryKey)
+		{
 			var index = 0;
 			var pk = GetPrimaryKeyValues(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey, primaryKey);
 			return ExistsAsync<T>(BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
@@ -1026,15 +1053,15 @@ namespace AsyncPoco
 		#region operation: linq style (Exists, Single, SingleOrDefault etc...)
 
 		/// <summary>
-		/// Returns the record with the specified primary key value
+		///     Returns the record with the specified primary key value
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="primaryKey">The primary key value of the record to fetch</param>
 		/// <returns>The single record matching the specified primary key value</returns>
 		/// <remarks>
-		/// Throws an exception if there are zero or more than one record with the specified primary key value.
+		///     Throws an exception if there are zero or more than one record with the specified primary key value.
 		/// </remarks>
-		public Task<T> SingleAsync<T>(object primaryKey) 
+		public Task<T> SingleAsync<T>(object primaryKey)
 		{
 			var index = 0;
 			var pk = GetPrimaryKeyValues(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey, primaryKey);
@@ -1042,15 +1069,15 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Returns the record with the specified primary key value, or the default value if not found
+		///     Returns the record with the specified primary key value, or the default value if not found
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="primaryKey">The primary key value of the record to fetch</param>
 		/// <returns>The single record matching the specified primary key value</returns>
 		/// <remarks>
-		/// If there are no records with the specified primary key value, default(T) (typically null) is returned.
+		///     If there are no records with the specified primary key value, default(T) (typically null) is returned.
 		/// </remarks>
-		public Task<T> SingleOrDefaultAsync<T>(object primaryKey) 
+		public Task<T> SingleOrDefaultAsync<T>(object primaryKey)
 		{
 			var index = 0;
 			var pk = GetPrimaryKeyValues(PocoData.ForType(typeof(T)).TableInfo.PrimaryKey, primaryKey);
@@ -1058,44 +1085,46 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Runs a query that should always return a single row.
+		///     Runs a query that should always return a single row.
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <returns>The single record matching the specified primary key value</returns>
 		/// <remarks>
-		/// Throws an exception if there are zero or more than one matching record
+		///     Throws an exception if there are zero or more than one matching record
 		/// </remarks>
 		public async Task<T> SingleAsync<T>(string sql, params object[] args)
 		{
 			var count = 0;
-			T poco = default(T);
-			await QueryAsync<T>(sql, args, v => {
+			var poco = default(T);
+			await QueryAsync<T>(sql, args, v =>
+			{
 				poco = v;
 				count++;
 				return count <= 2;
 			});
 			if (count == 0)
 				throw new InvalidOperationException("Sequence contains no elements.");
-			else if (count > 1)
+			if (count > 1)
 				throw new InvalidOperationException("Sequence contains more than one element.");
 
 			return poco;
 		}
 
 		/// <summary>
-		/// Runs a query that should always return either a single row, or no rows
+		///     Runs a query that should always return either a single row, or no rows
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <returns>The single record matching the specified primary key value, or default(T) if no matching rows</returns>
-		public async Task<T> SingleOrDefaultAsync<T>(string sql, params object[] args) 
+		public async Task<T> SingleOrDefaultAsync<T>(string sql, params object[] args)
 		{
 			var count = 0;
-			T poco = default(T);
-			await QueryAsync<T>(sql, args, v => {
+			var poco = default(T);
+			await QueryAsync<T>(sql, args, v =>
+			{
 				poco = v;
 				count++;
 				return count <= 2;
@@ -1107,17 +1136,18 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Runs a query that should always return at least one return
+		///     Runs a query that should always return at least one return
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <returns>The first record in the result set</returns>
-		public async Task<T> FirstAsync<T>(string sql, params object[] args) 
+		public async Task<T> FirstAsync<T>(string sql, params object[] args)
 		{
 			var gotIt = false;
-			T poco = default(T);
-			await QueryAsync<T>(sql, args, v => {
+			var poco = default(T);
+			await QueryAsync<T>(sql, args, v =>
+			{
 				poco = v;
 				gotIt = true;
 				return false;
@@ -1129,16 +1159,17 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Runs a query and returns the first record, or the default value if no matching records
+		///     Runs a query and returns the first record, or the default value if no matching records
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">The SQL query</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
 		/// <returns>The first record in the result set, or default(T) if no matching rows</returns>
-		public async Task<T> FirstOrDefaultAsync<T>(string sql, params object[] args) 
+		public async Task<T> FirstOrDefaultAsync<T>(string sql, params object[] args)
 		{
-			T poco = default(T);
-			await QueryAsync<T>(sql, args, v => {
+			var poco = default(T);
+			await QueryAsync<T>(sql, args, v =>
+			{
 				poco = v;
 				return false;
 			});
@@ -1146,13 +1177,13 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Runs a query that should always return a single row.
+		///     Runs a query that should always return a single row.
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>The single record matching the specified primary key value</returns>
 		/// <remarks>
-		/// Throws an exception if there are zero or more than one matching record
+		///     Throws an exception if there are zero or more than one matching record
 		/// </remarks>
 		public Task<T> SingleAsync<T>(Sql sql)
 		{
@@ -1160,43 +1191,44 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Runs a query that should always return either a single row, or no rows
+		///     Runs a query that should always return either a single row, or no rows
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>The single record matching the specified primary key value, or default(T) if no matching rows</returns>
-		public Task<T> SingleOrDefaultAsync<T>(Sql sql) 
+		public Task<T> SingleOrDefaultAsync<T>(Sql sql)
 		{
 			return SingleOrDefaultAsync<T>(sql.SQL, sql.Arguments);
 		}
 
 		/// <summary>
-		/// Runs a query that should always return at least one return
+		///     Runs a query that should always return at least one return
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>The first record in the result set</returns>
-		public Task<T> FirstAsync<T>(Sql sql) 
+		public Task<T> FirstAsync<T>(Sql sql)
 		{
 			return FirstAsync<T>(sql.SQL, sql.Arguments);
 		}
 
 		/// <summary>
-		/// Runs a query and returns the first record, or the default value if no matching records
+		///     Runs a query and returns the first record, or the default value if no matching records
 		/// </summary>
 		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>The first record in the result set, or default(T) if no matching rows</returns>
-		public Task<T> FirstOrDefaultAsync<T>(Sql sql) 
+		public Task<T> FirstOrDefaultAsync<T>(Sql sql)
 		{
 			return FirstOrDefaultAsync<T>(sql.SQL, sql.Arguments);
 		}
+
 		#endregion
 
 		#region operation: Insert
 
 		/// <summary>
-		/// Performs an SQL Insert
+		///     Performs an SQL Insert
 		/// </summary>
 		/// <param name="tableName">The name of the table to insert into</param>
 		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
@@ -1207,19 +1239,19 @@ namespace AsyncPoco
 			return InsertAsync(tableName, primaryKeyName, true, poco);
 		}
 
-
-
 		/// <summary>
-		/// Performs an SQL Insert
+		///     Performs an SQL Insert
 		/// </summary>
 		/// <param name="tableName">The name of the table to insert into</param>
 		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
 		/// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
 		/// <param name="poco">The POCO object that specifies the column values to be inserted</param>
 		/// <returns>The auto allocated primary key of the new record, or null for non-auto-increment tables</returns>
-		/// <remarks>Inserts a poco into a table.  If the poco has a property with the same name 
-		/// as the primary key the id of the new record is assigned to it.  Either way,
-		/// the new id is returned.</remarks>
+		/// <remarks>
+		///     Inserts a poco into a table.  If the poco has a property with the same name
+		///     as the primary key the id of the new record is assigned to it.  Either way,
+		///     the new id is returned.
+		/// </remarks>
 		public virtual async Task<object> InsertAsync(string tableName, string primaryKeyName, bool autoIncrement, object poco)
 		{
 			try
@@ -1244,11 +1276,11 @@ namespace AsyncPoco
 								continue;
 
 							// Don't insert the primary key (except under oracle where we need bring in the next sequence value)
-							if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true)==0)
+							if (autoIncrement && primaryKeyName != null && string.Compare(i.Key, primaryKeyName, true) == 0)
 							{
 								// Setup auto increment expression
-								string autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
-								if (autoIncExpression!=null)
+								var autoIncExpression = _dbType.GetAutoIncrementExpression(pd.TableInfo);
+								if (autoIncExpression != null)
 								{
 									names.Add(i.Key);
 									values.Add(autoIncExpression);
@@ -1261,7 +1293,7 @@ namespace AsyncPoco
 							AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
 						}
 
-						string outputClause = String.Empty;
+						var outputClause = string.Empty;
 						if (autoIncrement)
 						{
 							outputClause = _dbType.GetInsertOutputClause(primaryKeyName);
@@ -1269,11 +1301,11 @@ namespace AsyncPoco
 
 
 						cmd.CommandText = string.Format("INSERT INTO {0} ({1}){2} VALUES ({3})",
-								_dbType.EscapeTableName(tableName),
-								string.Join(",", names.ToArray()),
-								outputClause,
-								string.Join(",", values.ToArray())
-								);
+							_dbType.EscapeTableName(tableName),
+							string.Join(",", names.ToArray()),
+							outputClause,
+							string.Join(",", values.ToArray())
+							);
 
 						if (!autoIncrement)
 						{
@@ -1289,8 +1321,7 @@ namespace AsyncPoco
 						}
 
 
-						object id = await _dbType.ExecuteInsertAsync(this, cmd, primaryKeyName);
-
+						var id = await _dbType.ExecuteInsertAsync(this, cmd, primaryKeyName);
 
 						// Assign the ID back to the primary key property
 						if (primaryKeyName != null)
@@ -1319,12 +1350,14 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL Insert
+		///     Performs an SQL Insert
 		/// </summary>
 		/// <param name="poco">The POCO object that specifies the column values to be inserted</param>
 		/// <returns>The auto allocated primary key of the new record, or null for non-auto-increment tables</returns>
-		/// <remarks>The name of the table, it's primary key and whether it's an auto-allocated primary key are retrieved
-		/// from the POCO's attributes</remarks>
+		/// <remarks>
+		///     The name of the table, it's primary key and whether it's an auto-allocated primary key are retrieved
+		///     from the POCO's attributes
+		/// </remarks>
 		public Task<object> InsertAsync(object poco)
 		{
 			var pd = PocoData.ForType(poco.GetType());
@@ -1336,7 +1369,7 @@ namespace AsyncPoco
 		#region operation: Update
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="tableName">The name of the table to update</param>
 		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
@@ -1349,7 +1382,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="tableName">The name of the table to update</param>
 		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
@@ -1357,7 +1390,8 @@ namespace AsyncPoco
 		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
 		/// <param name="columns">The column names of the columns to be updated, or null for all</param>
 		/// <returns>The number of affected rows</returns>
-		public virtual async Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue, IEnumerable<string> columns)
+		public virtual async Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco,
+			object primaryKeyValue, IEnumerable<string> columns)
 		{
 			try
 			{
@@ -1369,7 +1403,7 @@ namespace AsyncPoco
 					{
 						var sb = new StringBuilder();
 						var index = 0;
-						var pd = PocoData.ForObject(poco,primaryKeyName);
+						var pd = PocoData.ForObject(poco, primaryKeyName);
 						var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, primaryKeyValue);
 
 						if (columns == null)
@@ -1417,11 +1451,12 @@ namespace AsyncPoco
 						}
 
 						cmd.CommandText = string.Format("UPDATE {0} SET {1} WHERE {2}",
-							_dbType.EscapeTableName(tableName), 
-							sb, 
+							_dbType.EscapeTableName(tableName),
+							sb,
 							BuildPrimaryKeySql(primaryKeyValuePairs, ref index));
 
-						foreach (var keyValue in primaryKeyValuePairs) {
+						foreach (var keyValue in primaryKeyValuePairs)
+						{
 							var pi = pd.Columns.ContainsKey(keyValue.Key) ? pd.Columns[keyValue.Key].PropertyInfo : null;
 							AddParam(cmd, keyValue.Value, pi);
 						}
@@ -1448,7 +1483,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="tableName">The name of the table to update</param>
 		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
@@ -1460,7 +1495,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="tableName">The name of the table to update</param>
 		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
@@ -1473,7 +1508,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
 		/// <param name="columns">The column names of the columns to be updated, or null for all</param>
@@ -1484,7 +1519,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
 		/// <returns>The number of affected rows</returns>
@@ -1494,7 +1529,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
 		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
@@ -1505,7 +1540,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
 		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
@@ -1518,7 +1553,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to update</typeparam>
 		/// <param name="sql">The SQL update and condition clause (ie: everything after "UPDATE tablename"</param>
@@ -1531,22 +1566,26 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL update
+		///     Performs an SQL update
 		/// </summary>
 		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to update</typeparam>
-		/// <param name="sql">An SQL builder object representing the SQL update and condition clause (ie: everything after "UPDATE tablename"</param>
+		/// <param name="sql">
+		///     An SQL builder object representing the SQL update and condition clause (ie: everything after "UPDATE
+		///     tablename"
+		/// </param>
 		/// <returns>The number of affected rows</returns>
 		public Task<int> UpdateAsync<T>(Sql sql)
 		{
 			var pd = PocoData.ForType(typeof(T));
 			return ExecuteAsync(new Sql(string.Format("UPDATE {0}", _dbType.EscapeTableName(pd.TableInfo.TableName))).Append(sql));
 		}
+
 		#endregion
 
 		#region operation: Delete
 
 		/// <summary>
-		/// Performs and SQL Delete
+		///     Performs and SQL Delete
 		/// </summary>
 		/// <param name="tableName">The name of the table to delete from</param>
 		/// <param name="primaryKeyName">The name of the primary key column</param>
@@ -1558,22 +1597,31 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs and SQL Delete
+		///     Performs and SQL Delete
 		/// </summary>
 		/// <param name="tableName">The name of the table to delete from</param>
 		/// <param name="primaryKeyName">The name of the primary key column</param>
-		/// <param name="poco">The POCO object whose primary key value will be used to delete the row (or null to use the supplied primary key value)</param>
-		/// <param name="primaryKeyValue">The value of the primary key identifing the record to be deleted (or null, or get this value from the POCO instance)</param>
+		/// <param name="poco">
+		///     The POCO object whose primary key value will be used to delete the row (or null to use the supplied
+		///     primary key value)
+		/// </param>
+		/// <param name="primaryKeyValue">
+		///     The value of the primary key identifing the record to be deleted (or null, or get this
+		///     value from the POCO instance)
+		/// </param>
 		/// <returns>The number of rows affected</returns>
 		public virtual Task<int> DeleteAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue)
 		{
 			var primaryKeyValuePairs = GetPrimaryKeyValues(primaryKeyName, primaryKeyValue);
 
-			if (poco != null) {
+			if (poco != null)
+			{
 				// If primary key value not specified, pick it up from the object
 				var pd = PocoData.ForObject(poco, primaryKeyName);
-				foreach (var i in pd.Columns) {
-					if (primaryKeyValue == null && primaryKeyValuePairs.ContainsKey(i.Key)) {
+				foreach (var i in pd.Columns)
+				{
+					if (primaryKeyValue == null && primaryKeyValuePairs.ContainsKey(i.Key))
+					{
 						primaryKeyValuePairs[i.Key] = i.Value.GetValue(poco);
 					}
 				}
@@ -1586,7 +1634,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL Delete
+		///     Performs an SQL Delete
 		/// </summary>
 		/// <param name="poco">The POCO object specifying the table name and primary key value of the row to be deleted</param>
 		/// <returns>The number of rows affected</returns>
@@ -1597,7 +1645,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL Delete
+		///     Performs an SQL Delete
 		/// </summary>
 		/// <typeparam name="T">The POCO class whose attributes identify the table and primary key to be used in the delete</typeparam>
 		/// <param name="pocoOrPrimaryKey">The value of the primary key of the row to delete</param>
@@ -1611,7 +1659,7 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL Delete
+		///     Performs an SQL Delete
 		/// </summary>
 		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to delete from</typeparam>
 		/// <param name="sql">The SQL condition clause identifying the row to delete (ie: everything after "DELETE FROM tablename"</param>
@@ -1624,22 +1672,27 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		/// Performs an SQL Delete
+		///     Performs an SQL Delete
 		/// </summary>
 		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to delete from</typeparam>
-		/// <param name="sql">An SQL builder object representing the SQL condition clause identifying the row to delete (ie: everything after "UPDATE tablename"</param>
+		/// <param name="sql">
+		///     An SQL builder object representing the SQL condition clause identifying the row to delete (ie:
+		///     everything after "UPDATE tablename"
+		/// </param>
 		/// <returns>The number of affected rows</returns>
 		public Task<int> DeleteAsync<T>(Sql sql)
 		{
 			var pd = PocoData.ForType(typeof(T));
-			return ExecuteAsync(new Sql(string.Format("DELETE FROM {0}", _dbType.EscapeTableName(pd.TableInfo.TableName))).Append(sql));
+			return
+				ExecuteAsync(new Sql(string.Format("DELETE FROM {0}", _dbType.EscapeTableName(pd.TableInfo.TableName))).Append(sql));
 		}
+
 		#endregion
 
 		#region operation: IsNew
 
 		/// <summary>
-		/// Check if a poco represents a new row
+		///     Check if a poco represents a new row
 		/// </summary>
 		/// <param name="primaryKeyName">The name of the primary key column</param>
 		/// <param name="poco">The object instance whose "newness" is to be tested</param>
@@ -1655,7 +1708,7 @@ namespace AsyncPoco
 				pk = pc.GetValue(poco);
 			}
 #if !PETAPOCO_NO_DYNAMIC
-			else if (poco.GetType() == typeof(System.Dynamic.ExpandoObject))
+			else if (poco.GetType() == typeof(ExpandoObject))
 			{
 				return true;
 			}
@@ -1664,7 +1717,8 @@ namespace AsyncPoco
 			{
 				var pi = poco.GetType().GetProperty(primaryKeyName);
 				if (pi == null)
-					throw new ArgumentException(string.Format("The object doesn't have a property matching the primary key column name '{0}'", primaryKeyName));
+					throw new ArgumentException(
+						string.Format("The object doesn't have a property matching the primary key column name '{0}'", primaryKeyName));
 				pk = pi.GetValue(poco, null);
 			}
 
@@ -1678,26 +1732,23 @@ namespace AsyncPoco
 				// Common primary key types
 				if (type == typeof(long))
 					return (long)pk == default(long);
-				else if (type == typeof(ulong))
+				if (type == typeof(ulong))
 					return (ulong)pk == default(ulong);
-				else if (type == typeof(int))
+				if (type == typeof(int))
 					return (int)pk == default(int);
-				else if (type == typeof(uint))
+				if (type == typeof(uint))
 					return (uint)pk == default(uint);
-				else if (type == typeof(Guid))
+				if (type == typeof(Guid))
 					return (Guid)pk == default(Guid);
 
 				// Create a default instance and compare
 				return pk == Activator.CreateInstance(pk.GetType());
 			}
-			else
-			{
-				return pk == null;
-			}
+			return pk == null;
 		}
 
 		/// <summary>
-		/// Check if a poco represents a new row
+		///     Check if a poco represents a new row
 		/// </summary>
 		/// <param name="poco">The object instance whose "newness" is to be tested</param>
 		/// <returns>True if the POCO represents a record already in the database</returns>
@@ -1706,14 +1757,17 @@ namespace AsyncPoco
 		{
 			var pd = PocoData.ForType(poco.GetType());
 			if (!pd.TableInfo.AutoIncrement)
-				throw new InvalidOperationException("IsNew() and Save() are only supported on tables with auto-increment/identity primary key columns");
+				throw new InvalidOperationException(
+					"IsNew() and Save() are only supported on tables with auto-increment/identity primary key columns");
 			return IsNew(pd.TableInfo.PrimaryKey, poco);
 		}
+
 		#endregion
 
 		#region operation: Save
+
 		/// <summary>
-		/// Saves a POCO by either performing either an SQL Insert or SQL Update
+		///     Saves a POCO by either performing either an SQL Insert or SQL Update
 		/// </summary>
 		/// <param name="tableName">The name of the table to be updated</param>
 		/// <param name="primaryKeyName">The name of the primary key column</param>
@@ -1724,14 +1778,11 @@ namespace AsyncPoco
 			{
 				return InsertAsync(tableName, primaryKeyName, true, poco);
 			}
-			else
-			{
-				return UpdateAsync(tableName, primaryKeyName, poco);
-			}
+			return UpdateAsync(tableName, primaryKeyName, poco);
 		}
 
 		/// <summary>
-		/// Saves a POCO by either performing either an SQL Insert or SQL Update
+		///     Saves a POCO by either performing either an SQL Insert or SQL Update
 		/// </summary>
 		/// <param name="poco">The POCO object to be saved</param>
 		public Task SaveAsync(object poco)
@@ -1739,11 +1790,13 @@ namespace AsyncPoco
 			var pd = PocoData.ForType(poco.GetType());
 			return SaveAsync(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, poco);
 		}
+
 		#endregion
 
 		#region operation: Multi-Poco Query/Fetch
+
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1752,10 +1805,13 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<TRet>> FetchAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, string sql, params object[] args) { return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2) }, cb, sql, args); }
+		public Task<List<TRet>> FetchAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, string sql, params object[] args)
+		{
+			return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2) }, cb, sql, args);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1765,10 +1821,13 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<TRet>> FetchAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, string sql, params object[] args) { return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql, args); }
+		public Task<List<TRet>> FetchAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, string sql, params object[] args)
+		{
+			return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql, args);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1779,10 +1838,14 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<TRet>> FetchAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, string sql, params object[] args) { return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql, args); }
+		public Task<List<TRet>> FetchAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, string sql,
+			params object[] args)
+		{
+			return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql, args);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1791,10 +1854,13 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, string sql, object[] args, Action<TRet> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2) }, cb, sql, args, action); }
+		public Task QueryAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, string sql, object[] args, Action<TRet> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2) }, cb, sql, args, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1804,10 +1870,13 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, string sql, object[] args, Action<TRet> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql, args, action); }
+		public Task QueryAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, string sql, object[] args, Action<TRet> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql, args, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1818,10 +1887,14 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, string sql, object[] args, Action<TRet> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql, args, action); }
+		public Task QueryAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, string sql, object[] args,
+			Action<TRet> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql, args, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1829,10 +1902,13 @@ namespace AsyncPoco
 		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<TRet>> FetchAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, Sql sql) { return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2) }, cb, sql.SQL, sql.Arguments); }
+		public Task<List<TRet>> FetchAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, Sql sql)
+		{
+			return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2) }, cb, sql.SQL, sql.Arguments);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1841,10 +1917,13 @@ namespace AsyncPoco
 		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<TRet>> FetchAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, Sql sql) { return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql.SQL, sql.Arguments); }
+		public Task<List<TRet>> FetchAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, Sql sql)
+		{
+			return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql.SQL, sql.Arguments);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1854,10 +1933,13 @@ namespace AsyncPoco
 		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<TRet>> FetchAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, Sql sql) { return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql.SQL, sql.Arguments); }
+		public Task<List<TRet>> FetchAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, Sql sql)
+		{
+			return FetchAsync<TRet>(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql.SQL, sql.Arguments);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1865,10 +1947,13 @@ namespace AsyncPoco
 		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, Sql sql, Action<TRet> action) { return QueryAsync(new[] { typeof(T1), typeof(T2) }, cb, sql.SQL, sql.Arguments, action); }
+		public Task QueryAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, Sql sql, Action<TRet> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2) }, cb, sql.SQL, sql.Arguments, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1877,10 +1962,13 @@ namespace AsyncPoco
 		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, Sql sql, Action<TRet> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql.SQL, sql.Arguments, action); }
+		public Task QueryAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, Sql sql, Action<TRet> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3) }, cb, sql.SQL, sql.Arguments, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1890,20 +1978,26 @@ namespace AsyncPoco
 		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, Sql sql, Action<TRet> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql.SQL, sql.Arguments, action); }
+		public Task QueryAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, Sql sql, Action<TRet> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, cb, sql.SQL, sql.Arguments, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<T1>> FetchAsync<T1, T2>(string sql, params object[] args) { return FetchAsync<T1>(new[] { typeof(T1), typeof(T2) }, null, sql, args); }
+		public Task<List<T1>> FetchAsync<T1, T2>(string sql, params object[] args)
+		{
+			return FetchAsync<T1>(new[] { typeof(T1), typeof(T2) }, null, sql, args);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1911,10 +2005,13 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<T1>> FetchAsync<T1, T2, T3>(string sql, params object[] args) { return FetchAsync<T1>(new[] { typeof(T1), typeof(T2), typeof(T3) }, null, sql, args); }
+		public Task<List<T1>> FetchAsync<T1, T2, T3>(string sql, params object[] args)
+		{
+			return FetchAsync<T1>(new[] { typeof(T1), typeof(T2), typeof(T3) }, null, sql, args);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1923,20 +2020,26 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<T1>> FetchAsync<T1, T2, T3, T4>(string sql, params object[] args) { return FetchAsync<T1>(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, null, sql, args); }
+		public Task<List<T1>> FetchAsync<T1, T2, T3, T4>(string sql, params object[] args)
+		{
+			return FetchAsync<T1>(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, null, sql, args);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2>(string sql, object[] args, Action<T1> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2) }, null, sql, args, action); }
+		public Task QueryAsync<T1, T2>(string sql, object[] args, Action<T1> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2) }, null, sql, args, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1944,10 +2047,13 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3>(string sql, object[] args, Action<T1> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2), typeof(T3) }, null, sql, args, action); }
+		public Task QueryAsync<T1, T2, T3>(string sql, object[] args, Action<T1> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3) }, null, sql, args, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1956,29 +2062,38 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3, T4>(string sql, object[] args, Action<T1> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, null, sql, args, action); }
+		public Task QueryAsync<T1, T2, T3, T4>(string sql, object[] args, Action<T1> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, null, sql, args, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<T1>> FetchAsync<T1, T2>(Sql sql) { return FetchAsync<T1, T2>(sql.SQL, sql.Arguments); }
+		public Task<List<T1>> FetchAsync<T1, T2>(Sql sql)
+		{
+			return FetchAsync<T1, T2>(sql.SQL, sql.Arguments);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
 		/// <typeparam name="T3">The third POCO type</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<T1>> FetchAsync<T1, T2, T3>(Sql sql) { return FetchAsync<T1, T2, T3>(sql.SQL, sql.Arguments); }
+		public Task<List<T1>> FetchAsync<T1, T2, T3>(Sql sql)
+		{
+			return FetchAsync<T1, T2, T3>(sql.SQL, sql.Arguments);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -1986,29 +2101,38 @@ namespace AsyncPoco
 		/// <typeparam name="T4">The fourth POCO type</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public Task<List<T1>> FetchAsync<T1, T2, T3, T4>(Sql sql) { return FetchAsync<T1, T2, T3, T4>(sql.SQL, sql.Arguments); }
+		public Task<List<T1>> FetchAsync<T1, T2, T3, T4>(Sql sql)
+		{
+			return FetchAsync<T1, T2, T3, T4>(sql.SQL, sql.Arguments);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2>(Sql sql, Action<T1> action) { return QueryAsync<T1>(new Type[] { typeof(T1), typeof(T2) }, null, sql.SQL, sql.Arguments, action); }
+		public Task QueryAsync<T1, T2>(Sql sql, Action<T1> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2) }, null, sql.SQL, sql.Arguments, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
 		/// <typeparam name="T3">The third POCO type</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3>(Sql sql, Action<T1> action) { return QueryAsync<T1>(new Type[] { typeof(T1), typeof(T2), typeof(T3) }, null, sql.SQL, sql.Arguments, action); }
+		public Task QueryAsync<T1, T2, T3>(Sql sql, Action<T1> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3) }, null, sql.SQL, sql.Arguments, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco query
+		///     Perform a multi-poco query
 		/// </summary>
 		/// <typeparam name="T1">The first POCO type</typeparam>
 		/// <typeparam name="T2">The second POCO type</typeparam>
@@ -2016,10 +2140,13 @@ namespace AsyncPoco
 		/// <typeparam name="T4">The fourth POCO type</typeparam>
 		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
 		/// <param name="action">Callback to process each result</param>
-		public Task QueryAsync<T1, T2, T3, T4>(Sql sql, Action<T1> action) { return QueryAsync(new Type[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, null, sql.SQL, sql.Arguments, action); }
+		public Task QueryAsync<T1, T2, T3, T4>(Sql sql, Action<T1> action)
+		{
+			return QueryAsync(new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4) }, null, sql.SQL, sql.Arguments, action);
+		}
 
 		/// <summary>
-		/// Perform a multi-poco fetch
+		///     Perform a multi-poco fetch
 		/// </summary>
 		/// <typeparam name="TRet">The type of objects to pass to the action</typeparam>
 		/// <param name="types">An array of Types representing the POCO types of the returned result set.</param>
@@ -2027,14 +2154,15 @@ namespace AsyncPoco
 		/// <param name="sql">The SQL query to be executed</param>
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <returns>A collection of POCO's as a List</returns>
-		public async Task<List<TRet>> FetchAsync<TRet>(Type[] types, object cb, string sql, params object[] args) {
+		public async Task<List<TRet>> FetchAsync<TRet>(Type[] types, object cb, string sql, params object[] args)
+		{
 			var list = new List<TRet>();
 			await QueryAsync<TRet>(types, cb, sql, args, list.Add);
 			return list;
 		}
 
 		/// <summary>
-		/// Performs a multi-poco query
+		///     Performs a multi-poco query
 		/// </summary>
 		/// <typeparam name="TRet">The type of objects to pass to the action</typeparam>
 		/// <param name="types">An array of Types representing the POCO types of the returned result set.</param>
@@ -2064,7 +2192,7 @@ namespace AsyncPoco
 					var factory = MultiPocoFactory.GetFactory<TRet>(types, _sharedConnection.ConnectionString, sql, r);
 					if (cb == null)
 						cb = MultiPocoFactory.GetAutoMapper(types.ToArray());
-					bool bNeedTerminator = false;
+					var bNeedTerminator = false;
 					using (r)
 					{
 						while (true)
@@ -2108,39 +2236,40 @@ namespace AsyncPoco
 		#region Last Command
 
 		/// <summary>
-		/// Retrieves the SQL of the last executed statement
+		///     Retrieves the SQL of the last executed statement
 		/// </summary>
-		public string LastSQL { get { return _lastSql; } }
+		public string LastSQL { get; private set; }
 
 		/// <summary>
-		/// Retrieves the arguments to the last execute statement
+		///     Retrieves the arguments to the last execute statement
 		/// </summary>
-		public object[] LastArgs { get { return _lastArgs; } }
-
+		public object[] LastArgs { get; private set; }
 
 		/// <summary>
-		/// Returns a formatted string describing the last executed SQL statement and it's argument values
+		///     Returns a formatted string describing the last executed SQL statement and it's argument values
 		/// </summary>
 		public string LastCommand
 		{
-			get { return FormatCommand(_lastSql, _lastArgs); }
+			get { return FormatCommand(LastSQL, LastArgs); }
 		}
+
 		#endregion
 
 		#region FormatCommand
 
 		/// <summary>
-		/// Formats the contents of a DB command for display
+		///     Formats the contents of a DB command for display
 		/// </summary>
 		/// <param name="cmd"></param>
 		/// <returns></returns>
 		public string FormatCommand(IDbCommand cmd)
 		{
-			return FormatCommand(cmd.CommandText, (from IDataParameter parameter in cmd.Parameters select parameter.Value).ToArray());
+			return FormatCommand(cmd.CommandText,
+				(from IDataParameter parameter in cmd.Parameters select parameter.Value).ToArray());
 		}
 
 		/// <summary>
-		/// Formats an SQL query and it's arguments for display
+		///     Formats an SQL query and it's arguments for display
 		/// </summary>
 		/// <param name="sql"></param>
 		/// <param name="args"></param>
@@ -2154,7 +2283,7 @@ namespace AsyncPoco
 			if (args != null && args.Length > 0)
 			{
 				sb.Append("\n");
-				for (int i = 0; i < args.Length; i++)
+				for (var i = 0; i < args.Length; i++)
 				{
 					sb.AppendFormat("\t -> {0}{1} [{2}] = \"{3}\"\n", _paramPrefix, i, args[i].GetType().Name, args[i]);
 				}
@@ -2162,6 +2291,7 @@ namespace AsyncPoco
 			}
 			return sb.ToString();
 		}
+
 		#endregion
 
 		#region Public Properties
@@ -2174,59 +2304,46 @@ namespace AsyncPoco
 		} */
 
 		/// <summary>
-		/// When set to true, PetaPoco will automatically create the "SELECT columns" part of any query that looks like it needs it
+		///     When set to true, PetaPoco will automatically create the "SELECT columns" part of any query that looks like it
+		///     needs it
 		/// </summary>
-		public bool EnableAutoSelect 
-		{ 
-			get; 
-			set; 
-		}
+		public bool EnableAutoSelect { get; set; }
 
 		/// <summary>
-		/// When set to true, parameters can be named ?myparam and populated from properties of the passed in argument values.
+		///     When set to true, parameters can be named ?myparam and populated from properties of the passed in argument values.
 		/// </summary>
-		public bool EnableNamedParams 
-		{ 
-			get; 
-			set; 
-		}
+		public bool EnableNamedParams { get; set; }
 
 		/// <summary>
-		/// Sets the timeout value for all SQL statements.
+		///     Sets the timeout value for all SQL statements.
 		/// </summary>
-		public int CommandTimeout 
-		{ 
-			get; 
-			set; 
-		}
+		public int CommandTimeout { get; set; }
 
 		/// <summary>
-		/// Sets the timeout value for the next (and only next) SQL statement
+		///     Sets the timeout value for the next (and only next) SQL statement
 		/// </summary>
-		public int OneTimeCommandTimeout 
-		{ 
-			get; 
-			set; 
-		}
+		public int OneTimeCommandTimeout { get; set; }
+
 		#endregion
 
 		#region Member Fields
+
 		// Member variables
 		internal DatabaseType _dbType;
-		string _connectionString;
-		string _providerName;
-		DbProviderFactory _factory;
-		DbConnection _sharedConnection;
-		DbTransaction _transaction;
-		int _sharedConnectionDepth;
-		int _transactionDepth;
-		bool _transactionCancelled;
-		string _lastSql;
-		object[] _lastArgs;
-		string _paramPrefix;
+		private readonly string _connectionString;
+		private readonly string _providerName;
+		private DbProviderFactory _factory;
+		private DbConnection _sharedConnection;
+		private DbTransaction _transaction;
+		private int _sharedConnectionDepth;
+		private int _transactionDepth;
+		private bool _transactionCancelled;
+		private string _paramPrefix;
+
 		#endregion
 
 		#region Internal operations
+
 		internal async Task ExecuteNonQueryHelperAsync(DbCommand cmd)
 		{
 			DoPreExecute(cmd);
@@ -2237,7 +2354,7 @@ namespace AsyncPoco
 		internal async Task<object> ExecuteScalarHelperAsync(DbCommand cmd)
 		{
 			DoPreExecute(cmd);
-			object r = await cmd.ExecuteScalarAsync();
+			var r = await cmd.ExecuteScalarAsync();
 			OnExecutedCommand(cmd);
 			return r;
 		}
@@ -2259,41 +2376,1098 @@ namespace AsyncPoco
 			OnExecutingCommand(cmd);
 
 			// Save it
-			_lastSql = cmd.CommandText;
-			_lastArgs = (from IDataParameter parameter in cmd.Parameters select parameter.Value).ToArray();
+			LastSQL = cmd.CommandText;
+			LastArgs = (from IDataParameter parameter in cmd.Parameters select parameter.Value).ToArray();
 		}
 
 		#endregion
 
 		#region Composite primary key support
-		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue) {
+
+		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue)
+		{
 			Dictionary<string, object> primaryKeyValues;
 
-			var multiplePrimaryKeysNames = primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
-			if (primaryKeyValue != null) {
-				if (multiplePrimaryKeysNames.Length == 1) {
-					primaryKeyValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { primaryKeyName, primaryKeyValue } };
+			var multiplePrimaryKeysNames =
+				primaryKeyName.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToArray();
+			if (primaryKeyValue != null)
+			{
+				if (multiplePrimaryKeysNames.Length == 1)
+				{
+					primaryKeyValues = new Dictionary<string, object>(ColumnComparer)
+					{
+						{primaryKeyName, primaryKeyValue}
+					};
 				}
-				else {
+				else
+				{
 					var dict = primaryKeyValue as Dictionary<string, object>;
-					primaryKeyValues = dict ?? multiplePrimaryKeysNames.ToDictionary(x => x, x => primaryKeyValue.GetType().GetProperties().Single(y => string.Equals(x, y.Name, StringComparison.OrdinalIgnoreCase)).GetValue(primaryKeyValue, null), StringComparer.OrdinalIgnoreCase);
+					primaryKeyValues = dict ??
+									multiplePrimaryKeysNames.ToDictionary(x => x,
+										x =>
+											primaryKeyValue.GetType()
+												.GetProperties()
+												.Single(y => string.Equals(x, y.Name, StringComparison.OrdinalIgnoreCase))
+												.GetValue(primaryKeyValue, null), ColumnComparer);
 				}
 			}
-			else {
-				primaryKeyValues = multiplePrimaryKeysNames.ToDictionary(x => x, x => (object)null, StringComparer.OrdinalIgnoreCase);
+			else
+			{
+				primaryKeyValues = multiplePrimaryKeysNames.ToDictionary(x => x, x => (object)null,
+					StringComparer.OrdinalIgnoreCase);
 			}
 
 			return primaryKeyValues;
 		}
 
-		private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index) {
+		private string BuildPrimaryKeySql(Dictionary<string, object> primaryKeyValuePair, ref int index)
+		{
 			var tempIndex = index;
 			index += primaryKeyValuePair.Count;
-			return string.Join(" AND ", primaryKeyValuePair.Select((x, i) => x.Value == null || x.Value == DBNull.Value ? string.Format("{0} IS NULL", _dbType.EscapeSqlIdentifier(x.Key)) : string.Format("{0} = @{1}", _dbType.EscapeSqlIdentifier(x.Key), tempIndex + i)).ToArray());
+			return string.Join(" AND ",
+				primaryKeyValuePair.Select(
+					(x, i) =>
+						x.Value == null || x.Value == DBNull.Value
+							? string.Format("{0} IS NULL", _dbType.EscapeSqlIdentifier(x.Key))
+							: string.Format("{0} = @{1}", _dbType.EscapeSqlIdentifier(x.Key), tempIndex + i)).ToArray());
 		}
+
 		#endregion
 	}
 
+	public interface IDatabase : IDisposable
+	{
+		/// <summary>
+		/// When set to true the first opened connection is kept alive until this object is disposed
+		/// </summary>
+		bool KeepConnectionAlive { get; set; }
+
+		/// <summary>
+		/// Provides access to the currently open shared connection (or null if none)
+		/// </summary>
+		IDbConnection Connection { get; }
+
+		/// <summary>
+		/// Retrieves the SQL of the last executed statement
+		/// </summary>
+		string LastSQL { get; }
+
+		/// <summary>
+		/// Retrieves the arguments to the last execute statement
+		/// </summary>
+		object[] LastArgs { get; }
+
+		/// <summary>
+		/// Returns a formatted string describing the last executed SQL statement and it's argument values
+		/// </summary>
+		string LastCommand { get; }
+
+		/// <summary>
+		/// When set to true, PetaPoco will automatically create the "SELECT columns" part of any query that looks like it needs it
+		/// </summary>
+		bool EnableAutoSelect { get; set; }
+
+		/// <summary>
+		/// When set to true, parameters can be named ?myparam and populated from properties of the passed in argument values.
+		/// </summary>
+		bool EnableNamedParams { get; set; }
+
+		/// <summary>
+		/// Sets the timeout value for all SQL statements.
+		/// </summary>
+		int CommandTimeout { get; set; }
+
+		/// <summary>
+		/// Sets the timeout value for the next (and only next) SQL statement
+		/// </summary>
+		int OneTimeCommandTimeout { get; set; }
+
+		/// <summary>
+		/// Open a connection that will be used for all subsequent queries.
+		/// </summary>
+		/// <remarks>
+		/// Calls to Open/CloseSharedConnection are reference counted and should be balanced
+		/// </remarks>
+		Task OpenSharedConnectionAsync();
+
+		/// <summary>
+		/// Releases the shared connection
+		/// </summary>
+		void CloseSharedConnection();
+
+		/// <summary>
+		/// Starts or continues a transaction.
+		/// </summary>
+		/// <returns>An ITransaction reference that must be Completed or disposed</returns>
+		/// <remarks>
+		/// This method makes management of calls to Begin/End/CompleteTransaction easier.  
+		/// 
+		/// The usage pattern for this should be:
+		/// 
+		/// using (var tx = db.GetTransaction())
+		/// {
+		///		// Do stuff
+		///		db.Update(...);
+		///		
+		///     // Mark the transaction as complete
+		///     tx.Complete();
+		/// }
+		/// 
+		/// Transactions can be nested but they must all be completed otherwise the entire
+		/// transaction is aborted.
+		/// </remarks>
+		Task<ITransaction> GetTransactionAsync();
+
+		/// <summary>
+		/// Called when a transaction starts.  Overridden by the T4 template generated database
+		/// classes to ensure the same DB instance is used throughout the transaction.
+		/// </summary>
+		void OnBeginTransaction();
+
+		/// <summary>
+		/// Called when a transaction ends.
+		/// </summary>
+		void OnEndTransaction();
+
+		/// <summary>
+		/// Starts a transaction scope, see GetTransaction() for recommended usage
+		/// </summary>
+		Task BeginTransactionAsync();
+
+		/// <summary>
+		/// Aborts the entire outer most transaction scope 
+		/// </summary>
+		/// <remarks>
+		/// Called automatically by Transaction.Dispose()
+		/// if the transaction wasn't completed.
+		/// </remarks>
+		void AbortTransaction();
+
+		/// <summary>
+		/// Marks the current transaction scope as complete.
+		/// </summary>
+		void CompleteTransaction();
+
+		DbCommand CreateCommand(DbConnection connection, string sql, params object[] args);
+
+		/// <summary>
+		/// Called if an exception occurs during processing of a DB operation.  Override to provide custom logging/handling.
+		/// </summary>
+		/// <param name="x">The exception instance</param>
+		/// <returns>True to re-throw the exception, false to suppress it</returns>
+		bool OnException(Exception x);
+
+		/// <summary>
+		/// Called when DB connection opened
+		/// </summary>
+		/// <param name="conn">The newly opened DbConnection</param>
+		/// <returns>The same or a replacement DbConnection</returns>
+		/// <remarks>
+		/// Override this method to provide custom logging of opening connection, or
+		/// to provide a proxy DbConnection.
+		/// </remarks>
+		DbConnection OnConnectionOpened(DbConnection conn);
+
+		/// <summary>
+		/// Called when DB connection closed
+		/// </summary>
+		/// <param name="conn">The soon to be closed IDBConnection</param>
+		void OnConnectionClosing(IDbConnection conn);
+
+		/// <summary>
+		/// Called just before an DB command is executed
+		/// </summary>
+		/// <param name="cmd">The command to be executed</param>
+		/// <remarks>
+		/// Override this method to provide custom logging of commands and/or
+		/// modification of the IDbCommand before it's executed
+		/// </remarks>
+		void OnExecutingCommand(IDbCommand cmd);
+
+		/// <summary>
+		/// Called on completion of command execution
+		/// </summary>
+		/// <param name="cmd">The IDbCommand that finished executing</param>
+		void OnExecutedCommand(IDbCommand cmd);
+
+		/// <summary>
+		/// Executes a non-query command
+		/// </summary>
+		/// <param name="sql">The SQL statement to execute</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>The number of rows affected</returns>
+		Task<int> ExecuteAsync(string sql, params object[] args);
+
+		/// <summary>
+		/// Executes a non-query command
+		/// </summary>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>The number of rows affected</returns>
+		Task<int> ExecuteAsync(Sql sql);
+
+		/// <summary>
+		/// Executes a query and return the first column of the first row in the result set.
+		/// </summary>
+		/// <typeparam name="T">The type that the result value should be cast to</typeparam>
+		/// <param name="sql">The SQL query to execute</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>The scalar value cast to T</returns>
+		Task<T> ExecuteScalarAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Executes a query and return the first column of the first row in the result set.
+		/// </summary>
+		/// <typeparam name="T">The type that the result value should be cast to</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>The scalar value cast to T</returns>
+		Task<T> ExecuteScalarAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Runs a query and returns the result set as a typed list
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query to execute</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A List holding the results of the query</returns>
+		Task<List<T>> FetchAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Runs a query and returns the result set as a typed list
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>A List holding the results of the query</returns>
+		Task<List<T>> FetchAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Retrieves a page of records	and the total number of available records
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="page">The 1 based page number to retrieve</param>
+		/// <param name="itemsPerPage">The number of records per page</param>
+		/// <param name="sqlCount">The SQL to retrieve the total number of records</param>
+		/// <param name="countArgs">Arguments to any embedded parameters in the sqlCount statement</param>
+		/// <param name="sqlPage">The SQL To retrieve a single page of results</param>
+		/// <param name="pageArgs">Arguments to any embedded parameters in the sqlPage statement</param>
+		/// <returns>A Page of results</returns>
+		/// <remarks>
+		/// This method allows separate SQL statements to be explicitly provided for the two parts of the page query.
+		/// The page and itemsPerPage parameters are not used directly and are used simply to populate the returned Page object.
+		/// </remarks>
+		Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, string sqlCount, object[] countArgs, string sqlPage, object[] pageArgs);
+
+		/// <summary>
+		/// Retrieves a page of records	and the total number of available records
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="page">The 1 based page number to retrieve</param>
+		/// <param name="itemsPerPage">The number of records per page</param>
+		/// <param name="sql">The base SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>A Page of results</returns>
+		/// <remarks>
+		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		/// records for the specified page.  It will also execute a second query to retrieve the
+		/// total number of records in the result set.
+		/// </remarks>
+		Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, string sql, params object[] args);
+
+		/// <summary>
+		/// Retrieves a page of records	and the total number of available records
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="page">The 1 based page number to retrieve</param>
+		/// <param name="itemsPerPage">The number of records per page</param>
+		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
+		/// <returns>A Page of results</returns>
+		/// <remarks>
+		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		/// records for the specified page.  It will also execute a second query to retrieve the
+		/// total number of records in the result set.
+		/// </remarks>
+		Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, Sql sql);
+
+		/// <summary>
+		/// Retrieves a page of records	and the total number of available records
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="page">The 1 based page number to retrieve</param>
+		/// <param name="itemsPerPage">The number of records per page</param>
+		/// <param name="sqlCount">An SQL builder object representing the SQL to retrieve the total number of records</param>
+		/// <param name="sqlPage">An SQL builder object representing the SQL to retrieve a single page of results</param>
+		/// <returns>A Page of results</returns>
+		/// <remarks>
+		/// This method allows separate SQL statements to be explicitly provided for the two parts of the page query.
+		/// The page and itemsPerPage parameters are not used directly and are used simply to populate the returned Page object.
+		/// </remarks>
+		Task<Page<T>> PageAsync<T>(long page, long itemsPerPage, Sql sqlCount, Sql sqlPage);
+
+		/// <summary>
+		/// Retrieves a page of records (without the total count)
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="page">The 1 based page number to retrieve</param>
+		/// <param name="itemsPerPage">The number of records per page</param>
+		/// <param name="sql">The base SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>A List of results</returns>
+		/// <remarks>
+		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		/// records for the specified page.
+		/// </remarks>
+		Task<List<T>> FetchAsync<T>(long page, long itemsPerPage, string sql, params object[] args);
+
+		/// <summary>
+		/// Retrieves a page of records (without the total count)
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="page">The 1 based page number to retrieve</param>
+		/// <param name="itemsPerPage">The number of records per page</param>
+		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
+		/// <returns>A List of results</returns>
+		/// <remarks>
+		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		/// records for the specified page.
+		/// </remarks>
+		Task<List<T>> FetchAsync<T>(long page, long itemsPerPage, Sql sql);
+
+		/// <summary>
+		/// Retrieves a range of records from result set
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="skip">The number of rows at the start of the result set to skip over</param>
+		/// <param name="take">The number of rows to retrieve</param>
+		/// <param name="sql">The base SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>A List of results</returns>
+		/// <remarks>
+		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		/// records for the specified range.
+		/// </remarks>
+		Task<List<T>> SkipTakeAsync<T>(long skip, long take, string sql, params object[] args);
+
+		/// <summary>
+		/// Retrieves a range of records from result set
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="skip">The number of rows at the start of the result set to skip over</param>
+		/// <param name="take">The number of rows to retrieve</param>
+		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
+		/// <returns>A List of results</returns>
+		/// <remarks>
+		/// PetaPoco will automatically modify the supplied SELECT statement to only retrieve the
+		/// records for the specified range.
+		/// </remarks>
+		Task<List<T>> SkipTakeAsync<T>(long skip, long take, Sql sql);
+
+		/// <summary>
+		/// Runs an SQL query, asynchronously passing each result to a callback
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="action">Callback to process each result</param>
+		/// <remarks>
+		/// For some DB providers, care should be taken to not start a new Query before finishing with
+		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		/// returns the results as a List.
+		/// </remarks>
+		Task QueryAsync<T>(string sql, Action<T> action);
+
+		/// <summary>
+		/// Runs an SQL query, asynchronously passing each result to a callback
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="func">Callback to process each result, return false to stop iterating</param>
+		/// <remarks>
+		/// For some DB providers, care should be taken to not start a new Query before finishing with
+		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		/// returns the results as a List.
+		/// </remarks>
+		Task QueryAsync<T>(string sql, Func<T, bool> func);
+
+		/// <summary>
+		/// Runs an SQL query, asynchronously passing each result to a callback
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <param name="action">Callback to process each result</param>
+		/// <remarks>
+		/// For some DB providers, care should be taken to not start a new Query before finishing with
+		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		/// returns the results as a List.
+		/// </remarks>
+		Task QueryAsync<T>(string sql, object[] args, Action<T> action);
+
+		/// <summary>
+		/// Runs an SQL query, asynchronously passing each result to a callback
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <param name="func">Callback to process each result, return false to stop iterating</param>
+		/// <remarks>
+		/// For some DB providers, care should be taken to not start a new Query before finishing with
+		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		/// returns the results as a List.
+		/// </remarks>
+		Task QueryAsync<T>(string sql, object[] args, Func<T, bool> func);
+
+		/// <summary>
+		/// Runs an SQL query, asynchronously passing each result to a callback
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
+		/// <param name="action">Callback to process each result</param>
+		/// <remarks>
+		/// For some DB providers, care should be taken to not start a new Query before finishing with
+		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		/// returns the results as a List.
+		/// </remarks>
+		Task QueryAsync<T>(Sql sql, Action<T> action);
+
+		/// <summary>
+		/// Runs an SQL query, asynchronously passing each result to a callback
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the base SQL query and it's arguments</param>
+		/// <param name="func">Callback to process each result, return false to stop iterating</param>
+		/// <remarks>
+		/// For some DB providers, care should be taken to not start a new Query before finishing with
+		/// and disposing the previous one. In cases where this is an issue, consider using Fetch which
+		/// returns the results as a List.
+		/// </remarks>
+		Task QueryAsync<T>(Sql sql, Func<T, bool> func);
+
+		/// <summary>
+		/// Checks for the existance of a row matching the specified condition
+		/// </summary>
+		/// <typeparam name="T">The Type representing the table being queried</typeparam>
+		/// <param name="sqlCondition">The SQL expression to be tested for (ie: the WHERE expression)</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>True if a record matching the condition is found.</returns>
+		Task<bool> ExistsAsync<T>(string sqlCondition, params object[] args);
+
+		/// <summary>
+		/// Checks for the existance of a row with the specified primary key value.
+		/// </summary>
+		/// <typeparam name="T">The Type representing the table being queried</typeparam>
+		/// <param name="primaryKey">The primary key value to look for</param>
+		/// <returns>True if a record with the specified primary key value exists.</returns>
+		Task<bool> ExistsAsync<T>(object primaryKey);
+
+		/// <summary>
+		/// Returns the record with the specified primary key value
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="primaryKey">The primary key value of the record to fetch</param>
+		/// <returns>The single record matching the specified primary key value</returns>
+		/// <remarks>
+		/// Throws an exception if there are zero or more than one record with the specified primary key value.
+		/// </remarks>
+		Task<T> SingleAsync<T>(object primaryKey);
+
+		/// <summary>
+		/// Returns the record with the specified primary key value, or the default value if not found
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="primaryKey">The primary key value of the record to fetch</param>
+		/// <returns>The single record matching the specified primary key value</returns>
+		/// <remarks>
+		/// If there are no records with the specified primary key value, default(T) (typically null) is returned.
+		/// </remarks>
+		Task<T> SingleOrDefaultAsync<T>(object primaryKey);
+
+		/// <summary>
+		/// Runs a query that should always return a single row.
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>The single record matching the specified primary key value</returns>
+		/// <remarks>
+		/// Throws an exception if there are zero or more than one matching record
+		/// </remarks>
+		Task<T> SingleAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Runs a query that should always return either a single row, or no rows
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>The single record matching the specified primary key value, or default(T) if no matching rows</returns>
+		Task<T> SingleOrDefaultAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Runs a query that should always return at least one return
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>The first record in the result set</returns>
+		Task<T> FirstAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Runs a query and returns the first record, or the default value if no matching records
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">The SQL query</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL statement</param>
+		/// <returns>The first record in the result set, or default(T) if no matching rows</returns>
+		Task<T> FirstOrDefaultAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Runs a query that should always return a single row.
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>The single record matching the specified primary key value</returns>
+		/// <remarks>
+		/// Throws an exception if there are zero or more than one matching record
+		/// </remarks>
+		Task<T> SingleAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Runs a query that should always return either a single row, or no rows
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>The single record matching the specified primary key value, or default(T) if no matching rows</returns>
+		Task<T> SingleOrDefaultAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Runs a query that should always return at least one return
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>The first record in the result set</returns>
+		Task<T> FirstAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Runs a query and returns the first record, or the default value if no matching records
+		/// </summary>
+		/// <typeparam name="T">The Type representing a row in the result set</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>The first record in the result set, or default(T) if no matching rows</returns>
+		Task<T> FirstOrDefaultAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Performs an SQL Insert
+		/// </summary>
+		/// <param name="tableName">The name of the table to insert into</param>
+		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
+		/// <param name="poco">The POCO object that specifies the column values to be inserted</param>
+		/// <returns>The auto allocated primary key of the new record</returns>
+		Task<object> InsertAsync(string tableName, string primaryKeyName, object poco);
+
+		/// <summary>
+		/// Performs an SQL Insert
+		/// </summary>
+		/// <param name="tableName">The name of the table to insert into</param>
+		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
+		/// <param name="autoIncrement">True if the primary key is automatically allocated by the DB</param>
+		/// <param name="poco">The POCO object that specifies the column values to be inserted</param>
+		/// <returns>The auto allocated primary key of the new record, or null for non-auto-increment tables</returns>
+		/// <remarks>Inserts a poco into a table.  If the poco has a property with the same name 
+		/// as the primary key the id of the new record is assigned to it.  Either way,
+		/// the new id is returned.</remarks>
+		Task<object> InsertAsync(string tableName, string primaryKeyName, bool autoIncrement, object poco);
+
+		/// <summary>
+		/// Performs an SQL Insert
+		/// </summary>
+		/// <param name="poco">The POCO object that specifies the column values to be inserted</param>
+		/// <returns>The auto allocated primary key of the new record, or null for non-auto-increment tables</returns>
+		/// <remarks>The name of the table, it's primary key and whether it's an auto-allocated primary key are retrieved
+		/// from the POCO's attributes</remarks>
+		Task<object> InsertAsync(object poco);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="tableName">The name of the table to update</param>
+		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
+		/// <returns>The number of affected records</returns>
+		Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="tableName">The name of the table to update</param>
+		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
+		/// <param name="columns">The column names of the columns to be updated, or null for all</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue, IEnumerable<string> columns);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="tableName">The name of the table to update</param>
+		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="tableName">The name of the table to update</param>
+		/// <param name="primaryKeyName">The name of the primary key column of the table</param>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <param name="columns">The column names of the columns to be updated, or null for all</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco, IEnumerable<string> columns);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <param name="columns">The column names of the columns to be updated, or null for all</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync(object poco, IEnumerable<string> columns);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync(object poco);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync(object poco, object primaryKeyValue);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <param name="poco">The POCO object that specifies the column values to be updated</param>
+		/// <param name="primaryKeyValue">The primary key of the record to be updated</param>
+		/// <param name="columns">The column names of the columns to be updated, or null for all</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync(object poco, object primaryKeyValue, IEnumerable<string> columns);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to update</typeparam>
+		/// <param name="sql">The SQL update and condition clause (ie: everything after "UPDATE tablename"</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Performs an SQL update
+		/// </summary>
+		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to update</typeparam>
+		/// <param name="sql">An SQL builder object representing the SQL update and condition clause (ie: everything after "UPDATE tablename"</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> UpdateAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Performs and SQL Delete
+		/// </summary>
+		/// <param name="tableName">The name of the table to delete from</param>
+		/// <param name="primaryKeyName">The name of the primary key column</param>
+		/// <param name="poco">The POCO object whose primary key value will be used to delete the row</param>
+		/// <returns>The number of rows affected</returns>
+		Task<int> DeleteAsync(string tableName, string primaryKeyName, object poco);
+
+		/// <summary>
+		/// Performs and SQL Delete
+		/// </summary>
+		/// <param name="tableName">The name of the table to delete from</param>
+		/// <param name="primaryKeyName">The name of the primary key column</param>
+		/// <param name="poco">The POCO object whose primary key value will be used to delete the row (or null to use the supplied primary key value)</param>
+		/// <param name="primaryKeyValue">The value of the primary key identifing the record to be deleted (or null, or get this value from the POCO instance)</param>
+		/// <returns>The number of rows affected</returns>
+		Task<int> DeleteAsync(string tableName, string primaryKeyName, object poco, object primaryKeyValue);
+
+		/// <summary>
+		/// Performs an SQL Delete
+		/// </summary>
+		/// <param name="poco">The POCO object specifying the table name and primary key value of the row to be deleted</param>
+		/// <returns>The number of rows affected</returns>
+		Task<int> DeleteAsync(object poco);
+
+		/// <summary>
+		/// Performs an SQL Delete
+		/// </summary>
+		/// <typeparam name="T">The POCO class whose attributes identify the table and primary key to be used in the delete</typeparam>
+		/// <param name="pocoOrPrimaryKey">The value of the primary key of the row to delete</param>
+		/// <returns></returns>
+		Task<int> DeleteAsync<T>(object pocoOrPrimaryKey);
+
+		/// <summary>
+		/// Performs an SQL Delete
+		/// </summary>
+		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to delete from</typeparam>
+		/// <param name="sql">The SQL condition clause identifying the row to delete (ie: everything after "DELETE FROM tablename"</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> DeleteAsync<T>(string sql, params object[] args);
+
+		/// <summary>
+		/// Performs an SQL Delete
+		/// </summary>
+		/// <typeparam name="T">The POCO class who's attributes specify the name of the table to delete from</typeparam>
+		/// <param name="sql">An SQL builder object representing the SQL condition clause identifying the row to delete (ie: everything after "UPDATE tablename"</param>
+		/// <returns>The number of affected rows</returns>
+		Task<int> DeleteAsync<T>(Sql sql);
+
+		/// <summary>
+		/// Check if a poco represents a new row
+		/// </summary>
+		/// <param name="primaryKeyName">The name of the primary key column</param>
+		/// <param name="poco">The object instance whose "newness" is to be tested</param>
+		/// <returns>True if the POCO represents a record already in the database</returns>
+		/// <remarks>This method simply tests if the POCO's primary key column property has been set to something non-zero.</remarks>
+		bool IsNew(string primaryKeyName, object poco);
+
+		/// <summary>
+		/// Check if a poco represents a new row
+		/// </summary>
+		/// <param name="poco">The object instance whose "newness" is to be tested</param>
+		/// <returns>True if the POCO represents a record already in the database</returns>
+		/// <remarks>This method simply tests if the POCO's primary key column property has been set to something non-zero.</remarks>
+		bool IsNew(object poco);
+
+		/// <summary>
+		/// Saves a POCO by either performing either an SQL Insert or SQL Update
+		/// </summary>
+		/// <param name="tableName">The name of the table to be updated</param>
+		/// <param name="primaryKeyName">The name of the primary key column</param>
+		/// <param name="poco">The POCO object to be saved</param>
+		Task SaveAsync(string tableName, string primaryKeyName, object poco);
+
+		/// <summary>
+		/// Saves a POCO by either performing either an SQL Insert or SQL Update
+		/// </summary>
+		/// <param name="poco">The POCO object to be saved</param>
+		Task SaveAsync(object poco);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="TRet">The returned list POCO type</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<TRet>> FetchAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, string sql, params object[] args);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="TRet">The returned list POCO type</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<TRet>> FetchAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, string sql, params object[] args);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <typeparam name="TRet">The returned list POCO type</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<TRet>> FetchAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, string sql, params object[] args);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="TRet">The type of objects passed to the action callback</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, string sql, object[] args, Action<TRet> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="TRet">The type of objects passed to the action callback</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, string sql, object[] args, Action<TRet> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <typeparam name="TRet">The type of objects passed to the action callback</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, string sql, object[] args, Action<TRet> action);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="TRet">The returned list POCO type</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<TRet>> FetchAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, Sql sql);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="TRet">The returned list POCO type</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<TRet>> FetchAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, Sql sql);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <typeparam name="TRet">The returned list POCO type</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<TRet>> FetchAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, Sql sql);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="TRet">The type of objects passed to the action callback</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, TRet>(Func<T1, T2, TRet> cb, Sql sql, Action<TRet> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="TRet">The type of objects passed to the action callback</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3, TRet>(Func<T1, T2, T3, TRet> cb, Sql sql, Action<TRet> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <typeparam name="TRet">The type of objects passed to the action callback</typeparam>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3, T4, TRet>(Func<T1, T2, T3, T4, TRet> cb, Sql sql, Action<TRet> action);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<T1>> FetchAsync<T1, T2>(string sql, params object[] args);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<T1>> FetchAsync<T1, T2, T3>(string sql, params object[] args);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<T1>> FetchAsync<T1, T2, T3, T4>(string sql, params object[] args);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2>(string sql, object[] args, Action<T1> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3>(string sql, object[] args, Action<T1> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3, T4>(string sql, object[] args, Action<T1> action);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<T1>> FetchAsync<T1, T2>(Sql sql);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<T1>> FetchAsync<T1, T2, T3>(Sql sql);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<T1>> FetchAsync<T1, T2, T3, T4>(Sql sql);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2>(Sql sql, Action<T1> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3>(Sql sql, Action<T1> action);
+
+		/// <summary>
+		/// Perform a multi-poco query
+		/// </summary>
+		/// <typeparam name="T1">The first POCO type</typeparam>
+		/// <typeparam name="T2">The second POCO type</typeparam>
+		/// <typeparam name="T3">The third POCO type</typeparam>
+		/// <typeparam name="T4">The fourth POCO type</typeparam>
+		/// <param name="sql">An SQL builder object representing the query and it's arguments</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<T1, T2, T3, T4>(Sql sql, Action<T1> action);
+
+		/// <summary>
+		/// Perform a multi-poco fetch
+		/// </summary>
+		/// <typeparam name="TRet">The type of objects to pass to the action</typeparam>
+		/// <param name="types">An array of Types representing the POCO types of the returned result set.</param>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <returns>A collection of POCO's as a List</returns>
+		Task<List<TRet>> FetchAsync<TRet>(Type[] types, object cb, string sql, params object[] args);
+
+		/// <summary>
+		/// Performs a multi-poco query
+		/// </summary>
+		/// <typeparam name="TRet">The type of objects to pass to the action</typeparam>
+		/// <param name="types">An array of Types representing the POCO types of the returned result set.</param>
+		/// <param name="cb">A callback function to connect the POCO instances, or null to automatically guess the relationships</param>
+		/// <param name="sql">The SQL query to be executed</param>
+		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
+		/// <param name="action">Callback to process each result</param>
+		Task QueryAsync<TRet>(Type[] types, object cb, string sql, object[] args, Action<TRet> action);
+
+		/// <summary>
+		/// Formats the contents of a DB command for display
+		/// </summary>
+		/// <param name="cmd"></param>
+		/// <returns></returns>
+		string FormatCommand(IDbCommand cmd);
+
+		/// <summary>
+		/// Formats an SQL query and it's arguments for display
+		/// </summary>
+		/// <param name="sql"></param>
+		/// <param name="args"></param>
+		/// <returns></returns>
+		string FormatCommand(string sql, object[] args);
+	}
 
 	/* 
 	Thanks to Adam Schroder (@schotime) for this.
@@ -3469,6 +4643,8 @@ namespace AsyncPoco
 
 		class MultiPocoFactory
 		{
+			public static IEqualityComparer<string> FieldNameComparer { get; set; } = StringComparer.InvariantCultureIgnoreCase;
+
 			// Instance data used by the Multipoco factory delegate - essentially a list of the nested poco factories to call
 			List<Delegate> _delegates;
 			public Delegate GetItem(int index) { return _delegates[index]; }
@@ -3530,7 +4706,7 @@ namespace AsyncPoco
 
 				// Find split point
 				int firstColumn = pos;
-				var usedColumns = new Dictionary<string, bool>();
+				var usedColumns = new Dictionary<string, bool>(FieldNameComparer);
 				for (; pos < r.FieldCount; pos++)
 				{
 					// Split if field name has already been used, or if the field doesn't exist in current poco but does in the next
@@ -3621,6 +4797,8 @@ namespace AsyncPoco
 
 		class PocoData
 		{
+			public static IEqualityComparer<string> ColumnComparer { get;set;}=StringComparer.InvariantCultureIgnoreCase;
+
 			public static PocoData ForObject(object o, string primaryKeyName)
 			{
 				var t = o.GetType();
@@ -3629,7 +4807,7 @@ namespace AsyncPoco
 				{
 					var pd = new PocoData();
 					pd.TableInfo = new TableInfo();
-					pd.Columns = new Dictionary<string, PocoColumn>(StringComparer.OrdinalIgnoreCase);
+					pd.Columns = new Dictionary<string, PocoColumn>(ColumnComparer);
 					pd.Columns.Add(primaryKeyName, new ExpandoColumn() { ColumnName = primaryKeyName });
 					pd.TableInfo.PrimaryKey = primaryKeyName;
 					pd.TableInfo.AutoIncrement = true;
@@ -3670,7 +4848,7 @@ namespace AsyncPoco
 				TableInfo = mapper.GetTableInfo(t);
 
 				// Work out bound properties
-				Columns = new Dictionary<string, PocoColumn>(StringComparer.OrdinalIgnoreCase);
+				Columns = new Dictionary<string, PocoColumn>(ColumnComparer);
 				foreach (var pi in t.GetProperties())
 				{
 					ColumnInfo ci = mapper.GetColumnInfo(pi);
@@ -3723,7 +4901,6 @@ namespace AsyncPoco
 #if !PETAPOCO_NO_DYNAMIC
 					if (type == typeof(object))
 					{
-						// var poco=new T()
 						il.Emit(OpCodes.Newobj, typeof(System.Dynamic.ExpandoObject).GetConstructor(Type.EmptyTypes));			// obj
 
 						MethodInfo fnAdd = typeof(IDictionary<string, object>).GetMethod("Add");
@@ -4151,6 +5328,8 @@ namespace AsyncPoco
 
 		internal static class EnumMapper
 		{
+			public static IEqualityComparer<string> FieldComparer { get; set; } = StringComparer.InvariantCultureIgnoreCase;
+
 			public static object EnumFromString(Type enumType, string value)
 			{
 				if (!enumType.IsEnum) {
@@ -4161,7 +5340,7 @@ namespace AsyncPoco
 				{
 					var values = Enum.GetValues(enumType);
 
-					var newmap = new Dictionary<string, object>(values.Length, StringComparer.InvariantCultureIgnoreCase);
+					var newmap = new Dictionary<string, object>(values.Length, FieldComparer);
 
 					foreach (var v in values)
 					{
