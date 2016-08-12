@@ -14,6 +14,8 @@ namespace AsyncPoco.Internal
 {
 	class MultiPocoFactory
 	{
+		public static IEqualityComparer<string> FieldNameComparer { get; set; } = StringComparer.InvariantCultureIgnoreCase;
+
 		// Instance data used by the Multipoco factory delegate - essentially a list of the nested poco factories to call
 		List<Delegate> _delegates;
 		public Delegate GetItem(int index) { return _delegates[index]; }
@@ -75,7 +77,7 @@ namespace AsyncPoco.Internal
 
 			// Find split point
 			int firstColumn = pos;
-			var usedColumns = new Dictionary<string, bool>();
+			var usedColumns = new Dictionary<string, bool>(FieldNameComparer);
 			for (; pos < r.FieldCount; pos++)
 			{
 				// Split if field name has already been used, or if the field doesn't exist in current poco but does in the next

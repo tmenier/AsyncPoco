@@ -7,6 +7,8 @@ namespace AsyncPoco.Internal
 {
 	internal static class EnumMapper
 	{
+		public static IEqualityComparer<string> FieldComparer { get; set; } = StringComparer.InvariantCultureIgnoreCase;
+
 		public static object EnumFromString(Type enumType, string value)
 		{
 			if (!enumType.IsEnum) {
@@ -17,7 +19,7 @@ namespace AsyncPoco.Internal
 			{
 				var values = Enum.GetValues(enumType);
 
-				var newmap = new Dictionary<string, object>(values.Length, StringComparer.InvariantCultureIgnoreCase);
+				var newmap = new Dictionary<string, object>(values.Length, FieldComparer);
 
 				foreach (var v in values)
 				{
