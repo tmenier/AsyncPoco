@@ -14,6 +14,8 @@ namespace AsyncPoco.Internal
 {
 	class PocoData
 	{
+		public static IEqualityComparer<string> ColumnComparer { get;set;}=StringComparer.InvariantCultureIgnoreCase;
+
 		public static PocoData ForObject(object o, string primaryKeyName)
 		{
 			var t = o.GetType();
@@ -22,7 +24,7 @@ namespace AsyncPoco.Internal
 			{
 				var pd = new PocoData();
 				pd.TableInfo = new TableInfo();
-				pd.Columns = new Dictionary<string, PocoColumn>(StringComparer.OrdinalIgnoreCase);
+				pd.Columns = new Dictionary<string, PocoColumn>(ColumnComparer);
 				pd.Columns.Add(primaryKeyName, new ExpandoColumn() { ColumnName = primaryKeyName });
 				pd.TableInfo.PrimaryKey = primaryKeyName;
 				pd.TableInfo.AutoIncrement = true;
@@ -63,7 +65,7 @@ namespace AsyncPoco.Internal
 			TableInfo = mapper.GetTableInfo(t);
 
 			// Work out bound properties
-			Columns = new Dictionary<string, PocoColumn>(StringComparer.OrdinalIgnoreCase);
+			Columns = new Dictionary<string, PocoColumn>(ColumnComparer);
 			foreach (var pi in t.GetProperties())
 			{
 				ColumnInfo ci = mapper.GetColumnInfo(pi);
@@ -116,7 +118,6 @@ namespace AsyncPoco.Internal
 #if !PETAPOCO_NO_DYNAMIC
 				if (type == typeof(object))
 				{
-					// var poco=new T()
 					il.Emit(OpCodes.Newobj, typeof(System.Dynamic.ExpandoObject).GetConstructor(Type.EmptyTypes));			// obj
 
 					MethodInfo fnAdd = typeof(IDictionary<string, object>).GetMethod("Add");
@@ -251,7 +252,7 @@ namespace AsyncPoco.Internal
 									{
 										il.Emit(OpCodes.Newobj, dstType.GetConstructor(new Type[] { Nullable.GetUnderlyingType(dstType) }));
 									}
-
+									
 									il.Emit(OpCodes.Callvirt, pc.PropertyInfo.GetSetMethod(true));		// poco
 									Handled = true;
 								}

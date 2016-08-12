@@ -108,7 +108,7 @@ namespace <#=Namespace #>
 			private Dictionary<string,bool> ModifiedColumns;
 			private void OnLoaded()
 			{
-				ModifiedColumns = new Dictionary<string,bool>();
+				ModifiedColumns = new Dictionary<string,bool>(ColumnComparer);
 			}
 			protected void MarkColumnModified(string column_name)
 			{
