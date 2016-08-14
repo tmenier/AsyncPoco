@@ -995,5 +995,13 @@ namespace AsyncPoco.Tests
 
 			Assert.IsNotNull(await db.SingleAsync<composite_pk>(new { id1 = 1, id2 = 2 }));
 		}
+
+		[Test]
+		public async Task NullableInt() {
+			var x = await db.ExecuteScalarAsync<int?>(Sql.Builder.Select("NULL"));
+			var y = await db.ExecuteScalarAsync<int?>(Sql.Builder.Select("8"));
+			Assert.AreEqual(null, x);
+			Assert.AreEqual(8, y);
+		}
 	}
 }

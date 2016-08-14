@@ -587,7 +587,7 @@ namespace AsyncPoco
 
 						// Handle nullable types
 						var u = Nullable.GetUnderlyingType(typeof(T));
-						if (u != null && val == null)
+						if (u != null && (val == null || val == DBNull.Value))
 							return default(T);
 
 						return (T)Convert.ChangeType(val, u ?? typeof(T));
