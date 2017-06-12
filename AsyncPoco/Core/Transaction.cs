@@ -3,6 +3,7 @@
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
  
 using System;
+using System.Data;
 using System.Threading.Tasks;
 
 namespace AsyncPoco
@@ -19,12 +20,22 @@ namespace AsyncPoco
 	{
 		public static async Task<ITransaction> BeginAsync(Database db) 
 		{
-			var trans = new Transaction(db);
-			await db.BeginTransactionAsync();
-			return trans;
+		    return await BeginAsyncInternal(db, db.BeginTransactionAsync);
 		}
 
-		private Transaction(Database db)
+	    public static async Task<ITransaction> BeginAsync(Database db, IsolationLevel isolationLevel)
+	    {
+	        return await BeginAsyncInternal(db, () => db.BeginTransactionAsync(isolationLevel));
+	    }
+
+	    private static async Task<ITransaction> BeginAsyncInternal(Database db, Func<Task> beginTransactionAction)
+	    {
+	        var trans = new Transaction(db);
+	        await beginTransactionAction();
+	        return trans;
+        }
+
+        private Transaction(Database db)
 		{
 			_db = db;
 		}
