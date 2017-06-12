@@ -89,11 +89,30 @@ namespace AsyncPoco
 		/// </remarks>
 		Task<ITransaction> GetTransactionAsync();
 
-		/// <summary>
-		/// Called when a transaction starts.  Overridden by the T4 template generated database
-		/// classes to ensure the same DB instance is used throughout the transaction.
-		/// </summary>
-		void OnBeginTransaction();
+	    /// <summary>
+	    ///     Starts or continues a transaction.
+	    /// </summary>
+	    /// <returns>An ITransaction reference that must be Completed or disposed</returns>
+	    /// <remarks>
+	    ///     This method makes management of calls to Begin/End/CompleteTransaction easier.
+	    ///     The usage pattern for this should be:
+	    ///     using (var tx = db.GetTransaction(IsolationLevel.ReadUncommitted))
+	    ///     {
+	    ///       // Do stuff
+	    ///       await db.QueryAsync(...);
+	    ///       // Mark the transaction as complete
+	    ///       tx.Complete();
+	    ///     }
+	    ///     Transactions can be nested but they must all be completed otherwise the entire
+	    ///     transaction is aborted.
+	    /// </remarks>
+	    Task<ITransaction> GetTransactionAsync(IsolationLevel isolationLevel);
+
+        /// <summary>
+        /// Called when a transaction starts.  Overridden by the T4 template generated database
+        /// classes to ensure the same DB instance is used throughout the transaction.
+        /// </summary>
+        void OnBeginTransaction();
 
 		/// <summary>
 		/// Called when a transaction ends.
@@ -105,14 +124,19 @@ namespace AsyncPoco
 		/// </summary>
 		Task BeginTransactionAsync();
 
-		/// <summary>
-		/// Aborts the entire outer most transaction scope 
-		/// </summary>
-		/// <remarks>
-		/// Called automatically by Transaction.Dispose()
-		/// if the transaction wasn't completed.
-		/// </remarks>
-		void AbortTransaction();
+        /// <summary>
+        /// Starts a transaction scope with a specific IsolationLevel, <see cref="GetTransactionAsync(IsolationLevel)"/> for recommended usage
+        /// </summary>
+        Task BeginTransactionAsync(IsolationLevel isolationLevel);
+
+        /// <summary>
+        /// Aborts the entire outer most transaction scope 
+        /// </summary>
+        /// <remarks>
+        /// Called automatically by Transaction.Dispose()
+        /// if the transaction wasn't completed.
+        /// </remarks>
+        void AbortTransaction();
 
 		/// <summary>
 		/// Marks the current transaction scope as complete.

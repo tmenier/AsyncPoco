@@ -241,10 +241,10 @@ namespace AsyncPoco
 		///     The usage pattern for this should be:
 		///     using (var tx = db.GetTransaction())
 		///     {
-		///     // Do stuff
-		///     db.Update(...);
-		///     // Mark the transaction as complete
-		///     tx.Complete();
+		///       // Do stuff
+		///       db.Update(...);
+		///       // Mark the transaction as complete
+		///       tx.Complete();
 		///     }
 		///     Transactions can be nested but they must all be completed otherwise the entire
 		///     transaction is aborted.
@@ -252,6 +252,28 @@ namespace AsyncPoco
 		public Task<ITransaction> GetTransactionAsync()
 		{
 			return Transaction.BeginAsync(this);
+		}
+
+		/// <summary>
+		///     Starts or continues a transaction.
+		/// </summary>
+		/// <returns>An ITransaction reference that must be Completed or disposed</returns>
+		/// <remarks>
+		///     This method makes management of calls to Begin/End/CompleteTransaction easier.
+		///     The usage pattern for this should be:
+		///     using (var tx = db.GetTransaction(IsolationLevel.ReadUncommitted))
+		///     {
+		///       // Do stuff
+		///       await db.QueryAsync(...);
+		///       // Mark the transaction as complete
+		///       tx.Complete();
+		///     }
+		///     Transactions can be nested but they must all be completed otherwise the entire
+		///     transaction is aborted.
+		/// </remarks>
+		public Task<ITransaction> GetTransactionAsync(IsolationLevel isolationLevel)
+		{
+			return Transaction.BeginAsync(this, isolationLevel);
 		}
 
 		/// <summary>
@@ -270,16 +292,29 @@ namespace AsyncPoco
 		}
 
 		/// <summary>
-		///     Starts a transaction scope, see GetTransaction() for recommended usage
+		///     Starts a transaction scope, <see cref="GetTransactionAsync()"/> for recommended usage
 		/// </summary>
 		public virtual async Task BeginTransactionAsync()
+		{
+			await BeginTransactionInternalAsync(() => _sharedConnection.BeginTransaction());
+		}
+
+		/// <summary>
+		///     Starts a transaction scope with a specific IsolationLevel, <see cref="GetTransactionAsync(IsolationLevel)"/> for recommended usage
+		/// </summary>
+		public virtual async Task BeginTransactionAsync(IsolationLevel isolationLevel)
+		{
+			await BeginTransactionInternalAsync(() => _sharedConnection.BeginTransaction(isolationLevel));
+		}
+
+		private async Task BeginTransactionInternalAsync(Func<DbTransaction> getTransaction)
 		{
 			_transactionDepth++;
 
 			if (_transactionDepth == 1)
 			{
 				await OpenSharedConnectionAsync();
-				_transaction = _sharedConnection.BeginTransaction();
+				_transaction = getTransaction();
 				_transactionCancelled = false;
 				OnBeginTransaction();
 			}
@@ -2519,6 +2554,25 @@ namespace AsyncPoco
 		Task<ITransaction> GetTransactionAsync();
 
 		/// <summary>
+		///     Starts or continues a transaction.
+		/// </summary>
+		/// <returns>An ITransaction reference that must be Completed or disposed</returns>
+		/// <remarks>
+		///     This method makes management of calls to Begin/End/CompleteTransaction easier.
+		///     The usage pattern for this should be:
+		///     using (var tx = db.GetTransaction(IsolationLevel.ReadUncommitted))
+		///     {
+		///       // Do stuff
+		///       await db.QueryAsync(...);
+		///       // Mark the transaction as complete
+		///       tx.Complete();
+		///     }
+		///     Transactions can be nested but they must all be completed otherwise the entire
+		///     transaction is aborted.
+		/// </remarks>
+		Task<ITransaction> GetTransactionAsync(IsolationLevel isolationLevel);
+
+		/// <summary>
 		/// Called when a transaction starts.  Overridden by the T4 template generated database
 		/// classes to ensure the same DB instance is used throughout the transaction.
 		/// </summary>
@@ -2533,6 +2587,11 @@ namespace AsyncPoco
 		/// Starts a transaction scope, see GetTransaction() for recommended usage
 		/// </summary>
 		Task BeginTransactionAsync();
+
+		/// <summary>
+		/// Starts a transaction scope with a specific IsolationLevel, <see cref="GetTransactionAsync(IsolationLevel)"/> for recommended usage
+		/// </summary>
+		Task BeginTransactionAsync(IsolationLevel isolationLevel);
 
 		/// <summary>
 		/// Aborts the entire outer most transaction scope 
@@ -4436,8 +4495,18 @@ namespace AsyncPoco
 	{
 		public static async Task<ITransaction> BeginAsync(Database db) 
 		{
+			return await BeginAsyncInternal(db, db.BeginTransactionAsync);
+		}
+
+		public static async Task<ITransaction> BeginAsync(Database db, IsolationLevel isolationLevel)
+		{
+			return await BeginAsyncInternal(db, () => db.BeginTransactionAsync(isolationLevel));
+		}
+
+		private static async Task<ITransaction> BeginAsyncInternal(Database db, Func<Task> beginTransactionAction)
+		{
 			var trans = new Transaction(db);
-			await db.BeginTransactionAsync();
+			await beginTransactionAction();
 			return trans;
 		}
 
