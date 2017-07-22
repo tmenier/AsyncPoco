@@ -1,13 +1,9 @@
-﻿using System;
+﻿using NUnit.Framework;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using AsyncPoco.Internal;
-using PetaTest;
 
 namespace AsyncPoco.Tests
 {
-	[TestFixture]
+    [TestFixture]
 	class Misc
 	{
 		Database db = new Database("sqlserver");
@@ -30,13 +26,12 @@ namespace AsyncPoco.Tests
 		{
 			Apples,
 			Pears,
-			Bananas,
+			Bananas
 		}
 
 		enum Fruits2
 		{
-			Oranges,
-			Berries,
+			Oranges
 		}
 
 		[Test]
@@ -51,8 +46,7 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(Fruits.Apples, Internal.EnumMapper.EnumFromString(typeof(Fruits?), "Apples"));
 			Assert.AreEqual(null, Internal.EnumMapper.EnumFromString(typeof(Fruits?), null));
 
-
-			Assert.Throws(typeof(Exception), () => Internal.EnumMapper.EnumFromString(typeof(Fruits2), "Apples"));
+			Assert.Throws<KeyNotFoundException>(() => Internal.EnumMapper.EnumFromString(typeof(Fruits2), "Apples"));
 		}
 	}
 }

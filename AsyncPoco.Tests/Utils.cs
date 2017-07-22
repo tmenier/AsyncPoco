@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace AsyncPoco.Tests
+﻿namespace AsyncPoco.Tests
 {
-	class Utils
+    class Utils
 	{
 		public static string LoadTextResource(string name)
 		{
@@ -17,6 +12,5 @@ namespace AsyncPoco.Tests
 
 			return str;
 		}
-
 	}
 }

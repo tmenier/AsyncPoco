@@ -1,13 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using PetaTest;
+﻿using NUnit.Framework;
+using System;
 using System.Reflection;
 
 namespace AsyncPoco.Tests
 {
-	public class Poco2
+    public class Poco2
 	{
 		public string prop1 { get; set; }
 		public string prop2 { get; set; }
