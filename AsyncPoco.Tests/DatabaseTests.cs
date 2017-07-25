@@ -9,6 +9,7 @@ namespace AsyncPoco.Tests
     [TestFixture("sqlserverce")]
     [TestFixture("mysql")]
     [TestFixture("postgresql")]
+    [TestFixture("sqlite")]    
     public class DatabaseTests
     {
         public DatabaseTests(string connectionStringName)
@@ -24,7 +25,7 @@ namespace AsyncPoco.Tests
         public async Task CreateDbAsync()
         {
             db = new Database(_connectionStringName);
-            var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName));
+            var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{_connectionStringName}_init.sql");
             foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
                 await db.ExecuteAsync(sql);
         }
@@ -32,7 +33,7 @@ namespace AsyncPoco.Tests
         [OneTimeTearDown]
         public async Task DeleteDbAsync()
         {
-            var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName));
+            var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{_connectionStringName}_done.sql");
             foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
                 await db.ExecuteAsync(sql);
         }
@@ -449,7 +450,6 @@ namespace AsyncPoco.Tests
             Assert.IsNull(c.content);
         }
 
-
         [Test]
         public async Task deco_IgnoreAttribute()
         {
@@ -589,8 +589,8 @@ namespace AsyncPoco.Tests
         {
             var id = await InsertRecordsAsync(1);
             var a2 = await db.SingleOrDefaultAsync<deco>("WHERE id=@0", id);
-            Assert.AreEqual(a2.date_created.Kind, DateTimeKind.Utc);
-            Assert.AreEqual(a2.date_edited.Value.Kind, DateTimeKind.Utc);
+            Assert.AreEqual(DateTimeKind.Utc, a2.date_created.Kind);
+            Assert.AreEqual(DateTimeKind.Utc, a2.date_edited.Value.Kind);
         }
 
         [Test]
@@ -822,6 +822,7 @@ namespace AsyncPoco.Tests
 
             return o;
         }
+
         [Test]
         public async Task Dynamic_Query()
         {
@@ -889,6 +890,7 @@ namespace AsyncPoco.Tests
             Assert.IsTrue(await db.ExistsAsync<deco>("id = @0", id));
             Assert.IsTrue(await db.ExistsAsync<deco>(id));
         }
+
         [Test]
         public async Task Exists_Query_DoesNot()
         {
