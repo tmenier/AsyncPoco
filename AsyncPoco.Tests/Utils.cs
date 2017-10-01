@@ -1,6 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace AsyncPoco.Tests
@@ -9,14 +9,19 @@ namespace AsyncPoco.Tests
 	{
 		public static string LoadTextResource(string name)
 		{
-			// get a reference to the current assembly
-			var a = System.Reflection.Assembly.GetExecutingAssembly();
-			System.IO.StreamReader r = new System.IO.StreamReader(a.GetManifestResourceStream(name));
-			string str = r.ReadToEnd();
-			r.Close();
-
-			return str;
+			string result = "";
+			var assembly = Assembly.GetExecutingAssembly();
+			if (assembly.GetManifestResourceNames().Contains(name))
+			{
+				using (var stream = assembly.GetManifestResourceStream(name))
+				{
+					using (var reader = new StreamReader(stream, Encoding.Default))
+					{
+						result = reader.ReadToEnd();
+					}
+				}
+			}
+			return result;
 		}
-
 	}
 }

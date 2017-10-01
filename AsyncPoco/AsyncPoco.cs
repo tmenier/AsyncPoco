@@ -5141,10 +5141,10 @@ namespace AsyncPoco
 					{
 						return src => EnumMapper.EnumFromString(dstType, (string)src);
 					}
-					else
-					{
-						return src => Convert.ChangeType(src, dstType, null);
-					}
+					return src => {
+						var actualDstType = Nullable.GetUnderlyingType(dstType) ?? dstType;
+						return Convert.ChangeType(src, actualDstType, null);
+					};
 				}
 
 				return null;
