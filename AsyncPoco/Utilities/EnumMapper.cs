@@ -24,13 +24,22 @@ namespace AsyncPoco.Internal
 				foreach (var v in values)
 				{
 					newmap.Add(v.ToString(), v);
+					newmap.Add(((int)v).ToString(), v);
 				}
 
 				return newmap;
 			});
 
+			if (value == null) return null;
 
-			return (value == null) ? null : map[value];
+			object val;
+			var parsed = (map.TryGetValue(value, out val));
+			return parsed ? val : GetDefaultValue(enumType);
+		}
+
+		public static object GetDefaultValue(Type type)
+		{
+			return type.IsValueType ? Activator.CreateInstance(type) : null;
 		}
 
 		public static object EnumFromNullableInt(Type dstType, int? src)
