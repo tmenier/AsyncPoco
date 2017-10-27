@@ -1,10 +1,6 @@
-﻿using System;
+﻿using NUnit.Framework;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using PetaTest;
-using AsyncPoco;
 
 namespace AsyncPoco.Tests
 {
@@ -33,16 +29,15 @@ namespace AsyncPoco.Tests
 		}
 
 
-
 		public MultiPocoTests()
 		{
 			_connectionStringName = "mysql";
 		}
 
-		string _connectionStringName;
+		readonly string _connectionStringName;
 		Database db;
 
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public async Task CreateDbAsync()
 		{
 			db = new Database(_connectionStringName);
@@ -92,7 +87,7 @@ CREATE TABLE authors (
 
 		}
 
-		[TestFixtureTearDown]
+		[OneTimeTearDown]
 		public Task DeleteDbAsync()
 		{
 			return db.ExecuteAsync(@"
@@ -125,7 +120,7 @@ DROP TABLE IF EXISTS authors;
 		public async Task CustomRelator()
 		{
 			var posts = await db.FetchAsync<post, author, post>(
-				(p,a)=>
+				(p, a) =>
 					{
 						p.author_obj = a;
 						return p;

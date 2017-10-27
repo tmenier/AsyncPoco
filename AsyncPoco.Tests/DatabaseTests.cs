@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using PetaTest;
+using NUnit.Framework;
 
 namespace AsyncPoco.Tests
 {
@@ -11,9 +9,10 @@ namespace AsyncPoco.Tests
 	[TestFixture("sqlserverce")]
 	[TestFixture("mysql")]
 	[TestFixture("postgresql")]
-	public class Tests
+	[TestFixture("sqlite")]
+	public class DatabaseTests
 	{
-		public Tests(string connectionStringName)
+		public DatabaseTests(string connectionStringName)
 		{
 			_connectionStringName = connectionStringName;
 		}
@@ -22,19 +21,19 @@ namespace AsyncPoco.Tests
 		Random r = new Random();
 		Database db;
 
-		[TestFixtureSetUp]
+		[OneTimeSetUp]
 		public async Task CreateDbAsync()
 		{
 			db = new Database(_connectionStringName);
-			var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_init.sql", _connectionStringName));
-			foreach(var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
+			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{_connectionStringName}_init.sql");
+			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
 
-		[TestFixtureTearDown]
+		[OneTimeTearDown]
 		public async Task DeleteDbAsync()
 		{
-			var all = Utils.LoadTextResource(string.Format("AsyncPoco.Tests.{0}_done.sql", _connectionStringName));
+			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{_connectionStringName}_done.sql");
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
@@ -57,7 +56,7 @@ namespace AsyncPoco.Tests
 
 		poco CreatePoco()
 		{
-			// Need a rounded date as DB can't store millis
+			// Need a rounded date as DB can't store milliseconds
 			var now = DateTime.UtcNow;
 			now = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second);
 
@@ -78,7 +77,7 @@ namespace AsyncPoco.Tests
 
 		deco CreateDeco()
 		{
-			// Need a rounded date as DB can't store millis
+			// Need a rounded date as DB can't store milliseconds
 			var now = DateTime.UtcNow;
 			now = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second);
 
@@ -130,7 +129,7 @@ namespace AsyncPoco.Tests
 			long lFirst = 0;
 			for (int i = 0; i < count; i++)
 			{
-				var o=CreatePoco();
+				var o = CreatePoco();
 				await db.InsertAsync("petapoco", "id", o);
 
 				var lc = db.LastCommand;
@@ -171,7 +170,7 @@ namespace AsyncPoco.Tests
 			o2.title = "New Title";
 			await db.SaveAsync("petapoco", "id", o2);
 
-			// Retrieve itagain
+			// Retrieve it again
 			var o3 = await db.SingleAsync<poco>("SELECT * FROM petapoco WHERE id=@0", o.id);
 
 			// Check it
@@ -197,7 +196,7 @@ namespace AsyncPoco.Tests
 			Assert.AreNotEqual(o.id, 0);
 
 			Assert.IsFalse(db.IsNew(o));
-			
+
 			// Retrieve it
 			var o2 = await db.SingleAsync<deco>("SELECT * FROM petapoco WHERE id=@0", o.id);
 
@@ -210,7 +209,7 @@ namespace AsyncPoco.Tests
 			o2.title = "New Title";
 			await db.SaveAsync(o2);
 
-			// Retrieve itagain
+			// Retrieve it again
 			var o3 = await db.SingleAsync<deco>("SELECT * FROM petapoco WHERE id=@0", o.id);
 
 			// Check it
@@ -251,7 +250,8 @@ namespace AsyncPoco.Tests
 			long id = await InsertRecordsAsync(count);
 
 			int i = 0;
-			await db.QueryAsync<poco>("SELECT * from petapoco ORDER BY id", p => {
+			await db.QueryAsync<poco>("SELECT * from petapoco ORDER BY id", p =>
+			{
 				Assert.AreEqual(p.id, id + i);
 				i++;
 			});
@@ -420,7 +420,8 @@ namespace AsyncPoco.Tests
 			await db.UpdateAsync<deco>("SET title=@0 WHERE id>=@1", "zap", id + 5);
 
 			// Check some updated
-			await db.QueryAsync<deco>("ORDER BY Id", d => {
+			await db.QueryAsync<deco>("ORDER BY Id", d =>
+			{
 				if (d.id >= id + 5)
 				{
 					Assert.AreEqual(d.title, "zap");
@@ -448,7 +449,6 @@ namespace AsyncPoco.Tests
 			Assert.IsNull(b.content);
 			Assert.IsNull(c.content);
 		}
-
 
 		[Test]
 		public async Task deco_IgnoreAttribute()
@@ -589,14 +589,14 @@ namespace AsyncPoco.Tests
 		{
 			var id = await InsertRecordsAsync(1);
 			var a2 = await db.SingleOrDefaultAsync<deco>("WHERE id=@0", id);
-			Assert.AreEqual(a2.date_created.Kind, DateTimeKind.Utc);
-			Assert.AreEqual(a2.date_edited.Value.Kind, DateTimeKind.Utc);
+			Assert.AreEqual(DateTimeKind.Utc, a2.date_created.Kind);
+			Assert.AreEqual(DateTimeKind.Utc, a2.date_edited.Value.Kind);
 		}
 
 		[Test]
 		public async Task DateTimeNullable()
 		{
-			// Need a rounded date as DB can't store millis
+			// Need a rounded date as DB can't store milliseconds
 			var now = DateTime.UtcNow;
 			now = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second);
 
@@ -635,11 +635,11 @@ namespace AsyncPoco.Tests
 		{
 			long first = await InsertRecordsAsync(10);
 
-			var items = await db.FetchAsync<deco>("WHERE id >= @min_id AND id <= @max_id", 
-						new 
-						{ 
-							min_id = first + 3, 
-							max_id = first + 6 
+			var items = await db.FetchAsync<deco>("WHERE id >= @min_id AND id <= @max_id",
+						new
+						{
+							min_id = first + 3,
+							max_id = first + 6
 						}
 					);
 			Assert.AreEqual(items.Count, 4);
@@ -659,9 +659,9 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public Task SingleOrDefault_Multiple()
+		public void SingleOrDefault_Multiple()
 		{
-			return Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			Assert.ThrowsAsync<InvalidOperationException>(async () =>
 			{
 				var id = await InsertRecordsAsync(2);
 				await db.SingleOrDefaultAsync<deco>("WHERE id>=@0", id);
@@ -689,9 +689,9 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public Task Single_Empty()
+		public void Single_Empty()
 		{
-			return Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			Assert.ThrowsAsync<InvalidOperationException>(async () =>
 			{
 				await db.SingleAsync<deco>("WHERE id=@0", 0);
 			});
@@ -705,9 +705,9 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public Task Single_Multiple()
+		public void Single_Multiple()
 		{
-			return Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			Assert.ThrowsAsync<InvalidOperationException>(async () =>
 			{
 				var id = await InsertRecordsAsync(2);
 				await db.SingleAsync<deco>("WHERE id>=@0", id);
@@ -715,9 +715,9 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public Task First_Empty()
+		public void First_Empty()
 		{
-			return Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			Assert.ThrowsAsync<InvalidOperationException>(async () =>
 			{
 				await db.FirstAsync<deco>("WHERE id=@0", 0);
 			});
@@ -751,9 +751,9 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public Task Single_PK_Empty()
+		public void Single_PK_Empty()
 		{
-			return Assert.ThrowsAsync<InvalidOperationException>(async () =>
+			Assert.ThrowsAsync<InvalidOperationException>(async () =>
 			{
 				await db.SingleAsync<deco>(0);
 			});
@@ -806,7 +806,7 @@ namespace AsyncPoco.Tests
 
 		dynamic CreateExpando()
 		{
-			// Need a rounded date as DB can't store millis
+			// Need a rounded date as DB can't store milliseconds
 			var now = DateTime.UtcNow;
 			now = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second);
 
@@ -822,6 +822,7 @@ namespace AsyncPoco.Tests
 
 			return o;
 		}
+
 		[Test]
 		public async Task Dynamic_Query()
 		{
@@ -848,7 +849,7 @@ namespace AsyncPoco.Tests
 			o2.title = "New Title";
 			await db.SaveAsync("petapoco", "id", o2);
 
-			// Retrieve itagain
+			// Retrieve it again
 			var o3 = await db.SingleAsync<dynamic>("SELECT * FROM petapoco WHERE id=@0", o.id);
 
 			// Check it
@@ -861,13 +862,13 @@ namespace AsyncPoco.Tests
 			var o4 = await db.SingleOrDefaultAsync<dynamic>("SELECT * FROM petapoco WHERE id=@0", o.id);
 			Assert.IsNull(o4);
 		}
-	
+
 		[Test]
 		public async Task Manual_PrimaryKey()
 		{
-			var o=new petapoco2();
-			o.email="blah@blah.com";
-			o.name="Mr Blah";
+			var o = new petapoco2();
+			o.email = "blah@blah.com";
+			o.name = "Mr Blah";
 			await db.InsertAsync(o);
 
 			var o2 = await db.SingleOrDefaultAsync<petapoco2>("WHERE email=@0", "blah@blah.com");
@@ -882,23 +883,25 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(id, id2);
 		}
 
-	    [Test]
+		[Test]
 		public async Task Exists_Query_Does()
-        {
-            var id = await InsertRecordsAsync(10);
+		{
+			var id = await InsertRecordsAsync(10);
 			Assert.IsTrue(await db.ExistsAsync<deco>("id = @0", id));
 			Assert.IsTrue(await db.ExistsAsync<deco>(id));
 		}
-        [Test]
-		public async Task Exists_Query_DoesNot()
-        {
-            var id = await InsertRecordsAsync(10);
-			Assert.IsFalse(await db.ExistsAsync<deco>("id = @0", id+100));
-			Assert.IsFalse(await db.ExistsAsync<deco>(id + 100));
-        }
 
 		[Test]
-		public async Task UpdateByObjectCompositePK() {
+		public async Task Exists_Query_DoesNot()
+		{
+			var id = await InsertRecordsAsync(10);
+			Assert.IsFalse(await db.ExistsAsync<deco>("id = @0", id + 100));
+			Assert.IsFalse(await db.ExistsAsync<deco>(id + 100));
+		}
+
+		[Test]
+		public async Task UpdateByObjectCompositePK()
+		{
 			await db.ExecuteAsync("DELETE FROM composite_pk");
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
@@ -914,7 +917,8 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public async Task UpdateByKeyCompositePK() {
+		public async Task UpdateByKeyCompositePK()
+		{
 			await db.ExecuteAsync("DELETE FROM composite_pk");
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
@@ -930,7 +934,8 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public async Task UpdateByColumnsCompositePK() {
+		public async Task UpdateByColumnsCompositePK()
+		{
 			await db.ExecuteAsync("DELETE FROM composite_pk");
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
@@ -946,7 +951,8 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public async Task DeleteByObjectCompositePK() {
+		public async Task DeleteByObjectCompositePK()
+		{
 			await db.ExecuteAsync("DELETE FROM composite_pk");
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
@@ -961,7 +967,8 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public async Task DeleteByKeyCompositePK() {
+		public async Task DeleteByKeyCompositePK()
+		{
 			await db.ExecuteAsync("DELETE FROM composite_pk");
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
@@ -976,7 +983,8 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public async Task ExistsCompositePK() {
+		public async Task ExistsCompositePK()
+		{
 			await db.ExecuteAsync("DELETE FROM composite_pk");
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
@@ -987,13 +995,23 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public async Task SingleCompositePK() {
+		public async Task SingleCompositePK()
+		{
 			await db.ExecuteAsync("DELETE FROM composite_pk");
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 1, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 1, id2 = 2, value = "fizz" });
 			await db.InsertAsync(new composite_pk { id1 = 2, id2 = 2, value = "fizz" });
 
 			Assert.IsNotNull(await db.SingleAsync<composite_pk>(new { id1 = 1, id2 = 2 }));
+		}
+
+		[Test]
+		public async Task NullableInt()
+		{
+			var x = await db.ExecuteScalarAsync<int?>(Sql.Builder.Select("NULL"));
+			var y = await db.ExecuteScalarAsync<int?>(Sql.Builder.Select("8"));
+			Assert.AreEqual(null, x);
+			Assert.AreEqual(8, y);
 		}
 	}
 }

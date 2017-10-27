@@ -587,7 +587,7 @@ namespace AsyncPoco
 
 						// Handle nullable types
 						var u = Nullable.GetUnderlyingType(typeof(T));
-						if (u != null && val == null)
+						if (u != null && (val == null || val == DBNull.Value))
 							return default(T);
 
 						return (T)Convert.ChangeType(val, u ?? typeof(T));
@@ -5141,10 +5141,10 @@ namespace AsyncPoco
 					{
 						return src => EnumMapper.EnumFromString(dstType, (string)src);
 					}
-					else
-					{
-						return src => Convert.ChangeType(src, dstType, null);
-					}
+					return src => {
+						var actualDstType = Nullable.GetUnderlyingType(dstType) ?? dstType;
+						return Convert.ChangeType(src, actualDstType, null);
+					};
 				}
 
 				return null;
@@ -5518,8 +5518,8 @@ namespace AsyncPoco
 
 			public override void PreExecute(IDbCommand cmd)
 			{
-				cmd.GetType().GetProperty("BindByName").SetValue(cmd, true, null);
-				cmd.GetType().GetProperty("InitialLONGFetchSize").SetValue(cmd, -1); //see http://docs.oracle.com/html/A96160_01/features.htm#1048395
+				cmd.GetType().GetProperty("BindByName")?.SetValue(cmd, true, null);
+				cmd.GetType().GetProperty("InitialLONGFetchSize")?.SetValue(cmd, -1); //see http://docs.oracle.com/html/A96160_01/features.htm#1048395
 			}
 
 			public override string BuildPageQuery(long skip, long take, PagingHelper.SQLParts parts, ref object[] args)

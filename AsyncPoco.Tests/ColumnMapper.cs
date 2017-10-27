@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using PetaTest;
+﻿using NUnit.Framework;
+using System;
 using System.Reflection;
 
 namespace AsyncPoco.Tests
@@ -76,7 +73,7 @@ namespace AsyncPoco.Tests
 	}
 
 	[TestFixture]
-	public class ColumnMapper 
+	public class ColumnMapper
 	{
 
 
@@ -85,7 +82,7 @@ namespace AsyncPoco.Tests
 		{
 
 			AsyncPoco.Mappers.Register(Assembly.GetExecutingAssembly(), new MyColumnMapper());
-			var pd=AsyncPoco.Internal.PocoData.ForType(typeof(Poco2));
+			var pd = AsyncPoco.Internal.PocoData.ForType(typeof(Poco2));
 
 			Assert.AreEqual(pd.Columns.Count, 3);
 			Assert.AreEqual(pd.Columns["prop1"].PropertyInfo.Name, "prop1");
