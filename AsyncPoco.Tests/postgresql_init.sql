@@ -32,3 +32,17 @@ CREATE TABLE composite_pk (
 	value	varchar(100) NOT NULL,
 	PRIMARY KEY (id1, id2)
 );
+
+DROP TABLE IF EXISTS enum_string;
+
+CREATE TABLE enum_string (
+	id			serial not null primary key,
+	fruit_type	varchar(127) not null
+);
+
+DROP TABLE IF EXISTS enum_integer;
+
+CREATE TABLE enum_integer (
+	id			serial not null primary key,
+	fruit_type	int not null
+);

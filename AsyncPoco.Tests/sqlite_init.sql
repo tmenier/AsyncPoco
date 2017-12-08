@@ -1,6 +1,8 @@
 ﻿DROP TABLE IF EXISTS petapoco;
 DROP TABLE IF EXISTS petapoco2;
 DROP TABLE IF EXISTS composite_pk;
+DROP TABLE IF EXISTS enum_string;
+DROP TABLE IF EXISTS enum_integer;
 
 CREATE TABLE petapoco (
 
@@ -27,4 +29,14 @@ CREATE TABLE composite_pk (
 	id2				INT NOT NULL,
 	value			TEXT NOT NULL,
 	PRIMARY KEY		(id1, id2)
+);
+
+CREATE TABLE enum_string (
+	id				INTEGER PRIMARY KEY AUTOINCREMENT,
+	fruit_type		TEXT NOT NULL
+);
+
+CREATE TABLE enum_integer (
+	id				INTEGER PRIMARY KEY AUTOINCREMENT,
+	fruit_type		INTEGER NOT NULL
 );

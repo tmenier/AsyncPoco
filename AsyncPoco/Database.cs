@@ -364,7 +364,14 @@ namespace AsyncPoco
 				var t = value.GetType();
 				if (t.IsEnum) // PostgreSQL .NET driver wont cast enum to int
 				{
-					p.Value = (int)value;
+					if (TreatEnumsAsString)
+					{
+						p.Value = value.ToString();
+					}
+					else
+					{
+						p.Value = (int) value;
+					}
 				}
 				else if (t == typeof(Guid))
 				{
@@ -1281,7 +1288,9 @@ namespace AsyncPoco
 
 							names.Add(_dbType.EscapeSqlIdentifier(i.Key));
 							values.Add(string.Format("{0}{1}", _paramPrefix, index++));
-							AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
+							var v = i.Value.GetValue(poco);
+							var pi = i.Value.PropertyInfo;
+							AddParam(cmd, v, pi);
 						}
 
 						var outputClause = string.Empty;
@@ -2283,6 +2292,12 @@ namespace AsyncPoco
 			return sb.ToString();
 		}
 
+		/// <summary>
+		/// If set to true, enumerations will persist as strings representing the text value of the enumeration.
+		/// This will not work well with <see cref="FlagsAttribute"/>-decorated enumerations.
+		/// </summary>
+		public bool TreatEnumsAsString { get; set; } = false;
+
 		#endregion
 
 		#region Public Properties
@@ -2350,7 +2365,7 @@ namespace AsyncPoco
 			return r;
 		}
 
-		internal void DoPreExecute(DbCommand cmd)
+		internal void DoPreExecute(IDbCommand cmd)
 		{
 			// Setup command timeout
 			if (OneTimeCommandTimeout != 0)

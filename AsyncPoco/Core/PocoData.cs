@@ -292,7 +292,8 @@ namespace AsyncPoco.Internal
 				il.Emit(OpCodes.Ret);
 
 				// Cache it, return it
-				return m.CreateDelegate(Expression.GetFuncType(typeof(IDataReader), type));
+				var d = m.CreateDelegate(Expression.GetFuncType(typeof(IDataReader), type));
+					return d;
 				}
 			);
 		}
@@ -331,23 +332,27 @@ namespace AsyncPoco.Internal
 			}
 
 			// Forced type conversion including integral types -> enum
-			if (IsEnumType(dstType) && IsIntegralType(srcType)) 
+			if (IsEnumType(dstType) && IsIntegralType(srcType))
 			{
 				var fromInt = (srcType == typeof(int));
 				var toNullable = !dstType.IsEnum;
 
-				if (fromInt && toNullable) 
+				if (fromInt && toNullable)
 				{
-					return src => EnumMapper.EnumFromNullableInt(dstType, (int?)src);
+					return src => EnumMapper.EnumFromNullableInt(dstType, (int?) src);
 				}
-				else if (toNullable) 
+
+				if (toNullable)
 				{
-					return src => {
+					return src =>
+					{
 						var i = Convert.ChangeType(src, typeof(int), null);
-						return EnumMapper.EnumFromNullableInt(dstType, i as int?);
+						var v = EnumMapper.EnumFromNullableInt(dstType, i as int?);
+						return v;
 					};
 				}
-				else if (!fromInt) 
+
+				if (!fromInt)
 				{
 					return src => Convert.ChangeType(src, typeof(int), null);
 				}
@@ -356,9 +361,15 @@ namespace AsyncPoco.Internal
 			{
 				if (IsEnumType(dstType) && srcType == typeof(string))
 				{
-					return src => EnumMapper.EnumFromString(dstType, (string)src);
+					return src =>
+					{
+						var v = EnumMapper.EnumFromString(dstType, (string) src);
+						return v;
+					};
 				}
-				return src => {
+
+				return src =>
+				{
 					var actualDstType = Nullable.GetUnderlyingType(dstType) ?? dstType;
 					return Convert.ChangeType(src, actualDstType, null);
 				};

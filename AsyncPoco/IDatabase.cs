@@ -1038,5 +1038,11 @@ namespace AsyncPoco
 		/// <param name="args"></param>
 		/// <returns></returns>
 		string FormatCommand(string sql, object[] args);
+
+		/// <summary>
+		/// If set to true, enumerations will persist as strings representing the text value of the enumeration.
+		/// This will not work well with <see cref="FlagsAttribute"/>-decorated enumerations.
+		/// </summary>
+		bool TreatEnumsAsString { get; set; }
 	}
 }

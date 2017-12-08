@@ -110,6 +110,7 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(a.nullreal, b.nullreal);
 		}
 
+
 		void AssertPocos(deco a, deco b)
 		{
 			Assert.AreEqual(a.id, b.id);
@@ -181,6 +182,94 @@ namespace AsyncPoco.Tests
 
 			// Should be gone!
 			var o4 = await db.SingleOrDefaultAsync<poco>("SELECT * FROM petapoco WHERE id=@0", o.id);
+			Assert.IsNull(o4);
+		}
+
+		[Test]
+		public async Task enum_poco_as_string_Crud()
+		{
+			// Create a known record
+			db.TreatEnumsAsString = true;
+			var o = new enum_poco
+			{
+				fruit_type = Fruits.Pears
+			};
+
+			Assert.IsTrue(db.IsNew("id", o));
+
+			// Insert it
+			await db.InsertAsync("enum_string", "id", o);
+			Assert.AreNotEqual(o.id, 0);
+
+			Assert.IsFalse(db.IsNew("id", o));
+
+			// Retrieve it
+			var o2 = await db.SingleAsync<enum_poco>("SELECT * FROM enum_string WHERE id=@0", o.id);
+
+			Assert.IsFalse(db.IsNew("id", o2));
+
+			// Check it
+			Assert.AreEqual(o, o2);
+
+			// Update it
+			o2.fruit_type = Fruits.Bananas;
+			await db.SaveAsync("enum_string", "id", o2);
+
+			// Retrieve it again
+			var o3 = await db.SingleAsync<enum_poco>("SELECT * FROM enum_string WHERE id=@0", o.id);
+
+			// Check it
+			Assert.AreEqual(o2, o3);
+
+			// Delete it
+			await db.DeleteAsync("enum_string", "id", o3);
+
+			// Should be gone!
+			var o4 = await db.SingleOrDefaultAsync<enum_poco>("SELECT * FROM enum_string WHERE id=@0", o.id);
+			Assert.IsNull(o4);
+		}
+
+		[Test]
+		public async Task enum_poco_as_integer_Crud()
+		{
+			// Create a known record
+			db.TreatEnumsAsString = false;
+			var o = new enum_poco
+			{
+				fruit_type = Fruits.Pears
+			};
+
+			Assert.IsTrue(db.IsNew("id", o));
+
+			// Insert it
+			await db.InsertAsync("enum_integer", "id", o);
+			Assert.AreNotEqual(o.id, 0);
+
+			Assert.IsFalse(db.IsNew("id", o));
+
+			// Retrieve it
+			var o2 = await db.SingleAsync<enum_poco>("SELECT * FROM enum_integer WHERE id=@0", o.id);
+
+			Assert.IsFalse(db.IsNew("id", o2));
+
+			// Check it
+			Assert.AreEqual(o, o2);
+
+			// Update it
+			o2.fruit_type = Fruits.Bananas;
+			await db.SaveAsync("enum_integer", "id", o2);
+
+			// Retrieve it again
+			var o3 = await db.SingleAsync<enum_poco>("SELECT * FROM enum_integer WHERE id=@0", o.id);
+
+			// Check it
+			Assert.AreEqual(o2, o3);
+
+			// Delete it
+			await db.DeleteAsync("enum_integer", "id", o3);
+
+			// Should be gone!
+			var o4 = await db.SingleOrDefaultAsync<enum_poco>("SELECT * FROM enum_integer WHERE id=@0", o.id);
 			Assert.IsNull(o4);
 		}
 

@@ -373,7 +373,14 @@ namespace AsyncPoco
 				var t = value.GetType();
 				if (t.IsEnum) // PostgreSQL .NET driver wont cast enum to int
 				{
-					p.Value = (int)value;
+					if (TreatEnumsAsString)
+					{
+						p.Value = value.ToString();
+					}
+					else
+					{
+						p.Value = (int) value;
+					}
 				}
 				else if (t == typeof(Guid))
 				{
@@ -1290,7 +1297,9 @@ namespace AsyncPoco
 
 							names.Add(_dbType.EscapeSqlIdentifier(i.Key));
 							values.Add(string.Format("{0}{1}", _paramPrefix, index++));
-							AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
+							var v = i.Value.GetValue(poco);
+							var pi = i.Value.PropertyInfo;
+							AddParam(cmd, v, pi);
 						}
 
 						var outputClause = string.Empty;
@@ -2292,6 +2301,12 @@ namespace AsyncPoco
 			return sb.ToString();
 		}
 
+		/// <summary>
+		/// If set to true, enumerations will persist as strings representing the text value of the enumeration.
+		/// This will not work well with <see cref="FlagsAttribute"/>-decorated enumerations.
+		/// </summary>
+		public bool TreatEnumsAsString { get; set; } = false;
+
 		#endregion
 
 		#region Public Properties
@@ -2359,7 +2374,7 @@ namespace AsyncPoco
 			return r;
 		}
 
-		internal void DoPreExecute(DbCommand cmd)
+		internal void DoPreExecute(IDbCommand cmd)
 		{
 			// Setup command timeout
 			if (OneTimeCommandTimeout != 0)
@@ -3467,6 +3482,12 @@ namespace AsyncPoco
 		/// <param name="args"></param>
 		/// <returns></returns>
 		string FormatCommand(string sql, object[] args);
+
+		/// <summary>
+		/// If set to true, enumerations will persist as strings representing the text value of the enumeration.
+		/// This will not work well with <see cref="FlagsAttribute"/>-decorated enumerations.
+		/// </summary>
+		bool TreatEnumsAsString { get; set; }
 	}
 
 	/* 
@@ -3744,6 +3765,13 @@ namespace AsyncPoco
 		{ 
 			get; 
 			private set; 
+		}
+
+		/// <summary>Returns a string that represents the current object.</summary>
+		/// <returns>A string that represents the current object.</returns>
+		public override string ToString()
+		{
+			return Value;
 		}
 	}
 
@@ -5075,7 +5103,8 @@ namespace AsyncPoco
 					il.Emit(OpCodes.Ret);
 
 					// Cache it, return it
-					return m.CreateDelegate(Expression.GetFuncType(typeof(IDataReader), type));
+					var d = m.CreateDelegate(Expression.GetFuncType(typeof(IDataReader), type));
+						return d;
 					}
 				);
 			}
@@ -5114,23 +5143,27 @@ namespace AsyncPoco
 				}
 
 				// Forced type conversion including integral types -> enum
-				if (IsEnumType(dstType) && IsIntegralType(srcType)) 
+				if (IsEnumType(dstType) && IsIntegralType(srcType))
 				{
 					var fromInt = (srcType == typeof(int));
 					var toNullable = !dstType.IsEnum;
 
-					if (fromInt && toNullable) 
+					if (fromInt && toNullable)
 					{
-						return src => EnumMapper.EnumFromNullableInt(dstType, (int?)src);
+						return src => EnumMapper.EnumFromNullableInt(dstType, (int?) src);
 					}
-					else if (toNullable) 
+
+					if (toNullable)
 					{
-						return src => {
+						return src =>
+						{
 							var i = Convert.ChangeType(src, typeof(int), null);
-							return EnumMapper.EnumFromNullableInt(dstType, i as int?);
+							var v = EnumMapper.EnumFromNullableInt(dstType, i as int?);
+							return v;
 						};
 					}
-					else if (!fromInt) 
+
+					if (!fromInt)
 					{
 						return src => Convert.ChangeType(src, typeof(int), null);
 					}
@@ -5139,9 +5172,15 @@ namespace AsyncPoco
 				{
 					if (IsEnumType(dstType) && srcType == typeof(string))
 					{
-						return src => EnumMapper.EnumFromString(dstType, (string)src);
+						return src =>
+						{
+							var v = EnumMapper.EnumFromString(dstType, (string) src);
+							return v;
+						};
 					}
-					return src => {
+
+					return src =>
+					{
 						var actualDstType = Nullable.GetUnderlyingType(dstType) ?? dstType;
 						return Convert.ChangeType(src, actualDstType, null);
 					};
@@ -5345,13 +5384,22 @@ namespace AsyncPoco
 					foreach (var v in values)
 					{
 						newmap.Add(v.ToString(), v);
+						newmap.Add(((int)v).ToString(), v);
 					}
 
 					return newmap;
 				});
 
+				if (value == null) return null;
 
-				return (value == null) ? null : map[value];
+				object val;
+				var parsed = (map.TryGetValue(value, out val));
+				return parsed ? val : GetDefaultValue(enumType);
+			}
+
+			public static object GetDefaultValue(Type type)
+			{
+				return type.IsValueType ? Activator.CreateInstance(type) : null;
 			}
 
 			public static object EnumFromNullableInt(Type dstType, int? src)
