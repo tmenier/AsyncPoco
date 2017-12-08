@@ -26,6 +26,23 @@ namespace AsyncPoco.Tests
 		public float? nullreal { get; set; }
 	}
 
+	class enum_poco
+	{
+		public int id { get; set; }
+		public Fruits? fruit_type { get; set; }
+
+		/// <summary>Determines whether the specified object is equal to the current object.</summary>
+		/// <returns>true if the specified object  is equal to the current object; otherwise, false.</returns>
+		/// <param name="obj">The object to compare with the current object. </param>
+		public override bool Equals(object obj)
+		{
+			var o = obj as enum_poco;
+			if (o == null) return false;
+			return o.id.Equals(id) && o.fruit_type.Equals(fruit_type);
+		}
+	}
+
+
 
 	// Attributed not-so-true poco
 	[TableName("petapoco")]

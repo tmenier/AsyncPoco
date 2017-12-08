@@ -32,3 +32,18 @@ CREATE TABLE composite_pk (
 	value	varchar(100) NOT NULL,
 	PRIMARY KEY (id1, id2)
 ) ENGINE=INNODB;
+
+DROP TABLE IF EXISTS enum_string;
+CREATE TABLE enum_string (
+	id			serial,
+	fruit_type	varchar(150),
+	PRIMARY KEY (id)
+) ENGINE=INNODB;
+
+DROP TABLE IF EXISTS enum_integer;
+CREATE TABLE enum_integer (
+	id			serial,
+	fruit_type	int,
+	PRIMARY KEY (id)
+) ENGINE=INNODB;
+

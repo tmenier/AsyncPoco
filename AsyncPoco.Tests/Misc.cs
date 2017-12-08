@@ -22,17 +22,6 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(db._dbType.EscapeTableName("column name"), "[column name]");
 		}
 
-		enum Fruits
-		{
-			Apples,
-			Pears,
-			Bananas
-		}
-
-		enum Fruits2
-		{
-			Oranges
-		}
 
 		[Test]
 		public void EnumMapper()
@@ -48,5 +37,17 @@ namespace AsyncPoco.Tests
 
 			Assert.Throws<KeyNotFoundException>(() => Internal.EnumMapper.EnumFromString(typeof(Fruits2), "Apples"));
 		}
+	}
+
+	enum Fruits
+	{
+		Apples,
+		Pears,
+		Bananas
+	}
+
+	enum Fruits2
+	{
+		Oranges
 	}
 }

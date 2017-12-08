@@ -35,3 +35,19 @@ CREATE TABLE composite_pk (
 	value	varchar(100) NOT NULL,
 	PRIMARY KEY (id1, id2)
 );
+
+IF OBJECT_ID('dbo.enum_string','U') IS NOT NULL
+	DROP TABLE dbo.enum_string;
+
+CREATE TABLE enum_string (
+	id			int not null identity primary key,
+	fruit_type	varchar(127) not null
+);
+
+IF OBJECT_ID('dbo.enum_integer','U') IS NOT NULL
+	DROP TABLE dbo.enum_integer;
+
+CREATE TABLE enum_integer (
+	id			int not null identity primary key,
+	fruit_type	int not null
+);
