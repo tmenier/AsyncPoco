@@ -2419,8 +2419,8 @@ namespace AsyncPoco
 				primaryKeyValuePair.Select(
 					(x, i) =>
 						x.Value == null || x.Value == DBNull.Value
-							? string.Format("{0} IS NULL", _dbType.EscapeSqlIdentifier(x.Key))
-							: string.Format("{0} = @{1}", _dbType.EscapeSqlIdentifier(x.Key), tempIndex + i)).ToArray());
+							? $"{_dbType.EscapeSqlIdentifier(x.Key)} IS NULL"
+							: $"{_dbType.EscapeSqlIdentifier(x.Key)} = {_paramPrefix}{tempIndex + i}").ToArray());
 		}
 
 		#endregion
