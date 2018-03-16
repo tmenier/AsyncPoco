@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("AsyncPoco")]
-[assembly: AssemblyVersion("1.2.0")]
+[assembly: AssemblyVersion("1.2.1")]
 [assembly: AssemblyDescription("A fully asynchronous fork of the popular PetaPoco micro-ORM.")]
 [assembly: AssemblyCompany("Topten Software, Todd Menier")]
 [assembly: AssemblyProduct("AsyncPoco")]
-[assembly: AssemblyCopyright("Copyright © Todd Menier 2014, PetaPoco Copyright © 2011-2012 Topten Software")]
+[assembly: AssemblyCopyright("Copyright © Todd Menier 2018, PetaPoco Copyright © 2011-2012 Topten Software")]
 
 // Setting ComVisible to false makes the types in this assembly not visible 
 // to COM components.  If you need to access a type in this assembly from 

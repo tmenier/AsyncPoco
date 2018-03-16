@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("AsyncPoco")]
 [assembly: AssemblyProduct("AsyncPoco.Tests")]
-[assembly: AssemblyCopyright("Copyright © AsyncPoco 2017")]
+[assembly: AssemblyCopyright("Copyright © AsyncPoco 2018")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
