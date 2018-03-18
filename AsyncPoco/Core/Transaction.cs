@@ -1,8 +1,9 @@
 ﻿// AsyncPoco is a fork of PetaPoco and is bound by the same licensing terms.
 // PetaPoco - A Tiny ORMish thing for your POCO's.
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
- 
+
 using System;
+using System.Data;
 using System.Threading.Tasks;
 
 namespace AsyncPoco
@@ -17,10 +18,10 @@ namespace AsyncPoco
 	/// </summary>
 	public class Transaction : ITransaction
 	{
-		public static async Task<ITransaction> BeginAsync(Database db) 
+        public static async Task<ITransaction> BeginAsync(Database db, IsolationLevel iso = IsolationLevel.ReadCommitted) 
 		{
 			var trans = new Transaction(db);
-			await db.BeginTransactionAsync();
+			await db.BeginTransactionAsync(iso);
 			return trans;
 		}
 
