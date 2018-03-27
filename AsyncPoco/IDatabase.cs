@@ -2,7 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+
+[assembly: InternalsVisibleTo("AsyncPoco.Tests")]
 
 namespace AsyncPoco
 {
@@ -16,7 +19,7 @@ namespace AsyncPoco
 		/// <summary>
 		/// Provides access to the currently open shared connection (or null if none)
 		/// </summary>
-		IDbConnection Connection { get; }
+		DbConnection Connection { get; }
 
 		/// <summary>
 		/// Retrieves the SQL of the last executed statement
@@ -143,7 +146,7 @@ namespace AsyncPoco
 		/// Called when DB connection closed
 		/// </summary>
 		/// <param name="conn">The soon to be closed IDBConnection</param>
-		void OnConnectionClosing(IDbConnection conn);
+		void OnConnectionClosing(DbConnection conn);
 
 		/// <summary>
 		/// Called just before an DB command is executed

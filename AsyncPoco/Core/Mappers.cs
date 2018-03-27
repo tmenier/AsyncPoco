@@ -83,7 +83,7 @@ namespace AsyncPoco
 				IMapper val;
 				if (_mappers.TryGetValue(t, out val))
 					return val;
-				if (_mappers.TryGetValue(t.Assembly, out val))
+				if (_mappers.TryGetValue(t.GetTypeInfo().Assembly, out val))
 					return val;
 
 				return Singleton<StandardMapper>.Instance;

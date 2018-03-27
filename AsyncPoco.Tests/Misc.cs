@@ -1,12 +1,13 @@
 ﻿using NUnit.Framework;
 using System.Collections.Generic;
+using System.Data.SqlClient;
 
 namespace AsyncPoco.Tests
 {
 	[TestFixture]
 	class Misc
 	{
-		Database db = new Database("sqlserver");
+		Database db = Database.Create<SqlConnection>(ConnectionStrings.Get("sqlserver"));
 
 		[Test]
 		public void EscapeColumnName()

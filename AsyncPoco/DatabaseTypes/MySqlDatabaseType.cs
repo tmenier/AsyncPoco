@@ -10,16 +10,6 @@ namespace AsyncPoco.DatabaseTypes
 {
 	class MySqlDatabaseType : DatabaseType
 	{
-		public override string GetParameterPrefix(string ConnectionString) {
-			return "@";
-
-			// logic prior to #39. tests fail with this logic in place, pass if prefix is always "@", so I don't believe this is needed.
-			//if (ConnectionString != null && ConnectionString.IndexOf("Allow User Variables=true") >= 0)
-			//	return "?";
-			//else
-			//	return "@";
-		}
-
 		public override string EscapeSqlIdentifier(string str)
 		{
 			return string.Format("`{0}`", str);

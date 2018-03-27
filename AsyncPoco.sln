@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26430.15
+VisualStudioVersion = 15.0.27130.2036
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AsyncPoco", "AsyncPoco\AsyncPoco.csproj", "{33699753-151D-4100-8F12-9AE1AEB5C5BD}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -13,13 +13,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AsyncPoco.DevBed", "AsyncPoco.DevBed\AsyncPoco.DevBed.csproj", "{5C9EF6D8-019A-4E0F-B882-8831583459E5}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "csj", "csj\csj.csproj", "{53F07078-98EA-4494-9829-74245992A7F1}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{EAE80EF7-B93E-4531-A244-73CE4B13BE02}"
-	ProjectSection(SolutionItems) = preProject
-		.nuget\NuGet.Config = .nuget\NuGet.Config
-		.nuget\NuGet.exe = .nuget\NuGet.exe
-		.nuget\NuGet.targets = .nuget\NuGet.targets
-	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E35A3DC6-96E9-4049-99F4-F061ECE64B07}"
 	ProjectSection(SolutionItems) = preProject
@@ -82,5 +75,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7274F101-8074-40C7-9673-F1C33FB76242}
 	EndGlobalSection
 EndGlobal

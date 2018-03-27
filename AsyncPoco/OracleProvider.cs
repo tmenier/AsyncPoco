@@ -97,7 +97,7 @@ namespace AsyncPoco
 					throw new TypeLoadException(message);
 				}
 
-				Assembly assembly = Assembly.Load(assemblyName);
+				Assembly assembly = Assembly.Load(new AssemblyName(assemblyName));
 
 				if (assembly == null)
 				{

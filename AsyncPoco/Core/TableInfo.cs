@@ -3,6 +3,8 @@
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
  
 using System;
+using System.Linq;
+using System.Reflection;
 
 namespace AsyncPoco
 {
@@ -58,11 +60,11 @@ namespace AsyncPoco
 			TableInfo ti = new TableInfo();
 
 			// Get the table name
-			var a = t.GetCustomAttributes(typeof(TableNameAttribute), true);
+			var a = t.GetTypeInfo().GetCustomAttributes(typeof(TableNameAttribute), true).ToArray();
 			ti.TableName = a.Length == 0 ? t.Name : (a[0] as TableNameAttribute).Value;
 
 			// Get the primary key
-			a = t.GetCustomAttributes(typeof(PrimaryKeyAttribute), true);
+			a = t.GetTypeInfo().GetCustomAttributes(typeof(PrimaryKeyAttribute), true).ToArray();
 			ti.PrimaryKey = a.Length == 0 ? "ID" : (a[0] as PrimaryKeyAttribute).Value;
 			ti.SequenceName = a.Length == 0 ? null : (a[0] as PrimaryKeyAttribute).sequenceName;
 			ti.AutoIncrement = a.Length == 0 ? false : (a[0] as PrimaryKeyAttribute).autoIncrement;
