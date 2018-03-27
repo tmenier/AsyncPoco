@@ -39,8 +39,4 @@
 	  <Reference Include="System.Configuration" />
 	</ItemGroup>
 
-	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-	  <Exec Command="cd $(ProjectDir)&#xD;&#xA;PostBuild.bat $(ConfigurationName)" />
-	</Target>
-
 </Project>
