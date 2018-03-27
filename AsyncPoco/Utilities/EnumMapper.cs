@@ -1,17 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace AsyncPoco.Internal
 {
 	internal static class EnumMapper
 	{
-		public static IEqualityComparer<string> FieldComparer { get; set; } = StringComparer.InvariantCultureIgnoreCase;
+		public static IEqualityComparer<string> FieldComparer { get; set; } = StringComparer.OrdinalIgnoreCase;
 
 		public static object EnumFromString(Type enumType, string value)
 		{
-			if (!enumType.IsEnum) {
+			if (!enumType.GetTypeInfo().IsEnum) {
 				enumType = Nullable.GetUnderlyingType(enumType);
 			}
 

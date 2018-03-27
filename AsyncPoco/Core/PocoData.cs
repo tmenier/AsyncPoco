@@ -14,7 +14,7 @@ namespace AsyncPoco.Internal
 {
 	class PocoData
 	{
-		public static IEqualityComparer<string> ColumnComparer { get;set;}=StringComparer.InvariantCultureIgnoreCase;
+		public static IEqualityComparer<string> ColumnComparer { get;set;} = StringComparer.OrdinalIgnoreCase;
 
 		public static PocoData ForObject(object o, string primaryKeyName)
 		{
@@ -88,18 +88,27 @@ namespace AsyncPoco.Internal
 
 		}
 
-		static bool IsIntegralType(Type t)
-		{
-			var tc = Type.GetTypeCode(t);
-			return tc >= TypeCode.SByte && tc <= TypeCode.UInt64;
+		static bool IsIntegralType(Type t) {
+			if (t.GetTypeInfo().IsGenericType && t.GetGenericTypeDefinition() == typeof(Nullable<>))
+				t = Nullable.GetUnderlyingType(t);
+
+			return
+				t == typeof(byte) ||
+				t == typeof(sbyte) ||
+				t == typeof(short) ||
+				t == typeof(ushort) ||
+				t == typeof(int) ||
+				t == typeof(uint) ||
+				t == typeof(long) ||
+				t == typeof(ulong);
 		}
 
 		// true for enumns and nullable enums
 		static bool IsEnumType(Type t)
 		{
-			if (t.IsEnum) return true;
+			if (t.GetTypeInfo().IsEnum) return true;
 			var underlying = Nullable.GetUnderlyingType(t);
-			return underlying != null && underlying.IsEnum;
+			return underlying != null && underlying.GetTypeInfo().IsEnum;
 		}
 
 		// Create factory function that can convert a IDataReader record into a POCO
@@ -173,7 +182,7 @@ namespace AsyncPoco.Internal
 				}
 				else
 #endif
-					if (type.IsValueType || type == typeof(string) || type == typeof(byte[]))
+					if (type.GetTypeInfo().IsValueType || type == typeof(string) || type == typeof(byte[]))
 					{
 						// Do we need to install a converter?
 						var srcType = r.GetFieldType(0);
@@ -208,7 +217,7 @@ namespace AsyncPoco.Internal
 					else
 					{
 						// var poco=new T()
-						il.Emit(OpCodes.Newobj, type.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[0], null));
+						il.Emit(OpCodes.Newobj, type.GetConstructor(new Type[0]));
 
 						// Enumerate all fields generating a set assignment for the column
 						for (int i = firstColumn; i < firstColumn + countColumns; i++)
@@ -281,7 +290,7 @@ namespace AsyncPoco.Internal
 							il.MarkLabel(lblNext);
 						}
 
-						var fnOnLoaded = RecurseInheritedTypes<MethodInfo>(type, (x) => x.GetMethod("OnLoaded", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, new Type[0], null));
+						var fnOnLoaded = RecurseInheritedTypes<MethodInfo>(type, (x) => x.GetMethod("OnLoaded", new Type[0]));
 						if (fnOnLoaded != null)
 						{
 							il.Emit(OpCodes.Dup);
@@ -334,7 +343,7 @@ namespace AsyncPoco.Internal
 			if (IsEnumType(dstType) && IsIntegralType(srcType)) 
 			{
 				var fromInt = (srcType == typeof(int));
-				var toNullable = !dstType.IsEnum;
+				var toNullable = !dstType.GetTypeInfo().IsEnum;
 
 				if (fromInt && toNullable) 
 				{
@@ -375,7 +384,7 @@ namespace AsyncPoco.Internal
 				T info = cb(t);
 				if (info != null)
 					return info;
-				t = t.BaseType;
+				t = t.GetTypeInfo().BaseType;
 			}
 			return default(T);
 		}
@@ -390,7 +399,7 @@ namespace AsyncPoco.Internal
 		static List<Func<object, object>> _converters = new List<Func<object, object>>();
 		static MethodInfo fnGetValue = typeof(IDataRecord).GetMethod("GetValue", new Type[] { typeof(int) });
 		static MethodInfo fnIsDBNull = typeof(IDataRecord).GetMethod("IsDBNull");
-		static FieldInfo fldConverters = typeof(PocoData).GetField("_converters", BindingFlags.Static | BindingFlags.GetField | BindingFlags.NonPublic);
+		static FieldInfo fldConverters = typeof(PocoData).GetField("_converters", BindingFlags.Static | BindingFlags.NonPublic);
 		static MethodInfo fnListGetItem = typeof(List<Func<object, object>>).GetProperty("Item").GetGetMethod();
 		static MethodInfo fnInvoke = typeof(Func<object, object>).GetMethod("Invoke");
 		public Type type;

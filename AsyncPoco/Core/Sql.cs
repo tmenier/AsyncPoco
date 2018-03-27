@@ -118,7 +118,7 @@ namespace AsyncPoco
 
 		static bool Is(Sql sql, string sqltype)
 		{
-			return sql != null && sql._sql != null && sql._sql.StartsWith(sqltype, StringComparison.InvariantCultureIgnoreCase);
+			return sql != null && sql._sql != null && sql._sql.StartsWith(sqltype, StringComparison.OrdinalIgnoreCase);
 		}
 
 		private void Build(StringBuilder sb, List<object> args, Sql lhs)

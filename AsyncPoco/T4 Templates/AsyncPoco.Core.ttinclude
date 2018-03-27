@@ -313,7 +313,7 @@ private string GetConfigPath()
     foreach (EnvDTE.ProjectItem item in project.ProjectItems)
     {
         // if it is the app.config file, then open it up
-        if (item.Name.Equals("App.config",StringComparison.InvariantCultureIgnoreCase) || item.Name.Equals("Web.config",StringComparison.InvariantCultureIgnoreCase))
+        if (item.Name.Equals("App.config",StringComparison.OrdinalIgnoreCase) || item.Name.Equals("Web.config",StringComparison.OrdinalIgnoreCase))
 			return GetProjectPath() + "\\" + item.Name;
     }
     return String.Empty;

@@ -4,6 +4,7 @@
  
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Text;
 
@@ -35,7 +36,7 @@ namespace AsyncPoco.Internal
 					arg_val = null;
 					foreach (var o in args_src)
 					{
-						var pi = o.GetType().GetProperty(param);
+						var pi = o.GetType().GetTypeInfo().GetDeclaredProperty(param);
 						if (pi != null)
 						{
 							arg_val = pi.GetValue(o, null);

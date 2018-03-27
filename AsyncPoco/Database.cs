@@ -14,7 +14,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Configuration;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -33,7 +32,7 @@ namespace AsyncPoco
 	/// </summary>
 	public class Database : IDatabase
 	{
-		private static IEqualityComparer<string> _columnComparer = StringComparer.InvariantCultureIgnoreCase;
+		private static IEqualityComparer<string> _columnComparer = StringComparer.OrdinalIgnoreCase;
 		public static IEqualityComparer<string> ColumnComparer
 		{
 			get { return _columnComparer; }
@@ -62,6 +61,22 @@ namespace AsyncPoco
 
 		#region Constructors
 
+		public static Database Create<TDbConnection>(string connectionString) where TDbConnection : DbConnection, new() {
+			var dbType = DatabaseType.Resolve(typeof(TDbConnection).Name, null);
+			return new Database(dbType, () => new TDbConnection { ConnectionString = connectionString });
+		}
+
+		public static Database Create<TDbConnection>(Func<TDbConnection> createConnection) where TDbConnection : DbConnection, new() {
+			var dbType = DatabaseType.Resolve(typeof(TDbConnection).Name, null);
+			return new Database(dbType, createConnection);
+		}
+
+		internal Database(DatabaseType dbType, Func<DbConnection> createConnection) {
+			_dbType = dbType;
+			_connectionFactory = createConnection;
+			CommonConstruct();
+		}
+
 		/// <summary>
 		///     Construct a database using a supplied DbConnection
 		/// </summary>
@@ -72,12 +87,13 @@ namespace AsyncPoco
 		/// </remarks>
 		public Database(DbConnection connection)
 		{
+			_dbType = DatabaseType.Resolve(connection.GetType().Name, null);
 			_sharedConnection = connection;
-			_connectionString = connection.ConnectionString;
 			_sharedConnectionDepth = 2; // Prevent closing external connection
 			CommonConstruct();
 		}
 
+#if (NET45)
 		/// <summary>
 		///     Construct a database using a supplied connections string and optionally a provider name
 		/// </summary>
@@ -88,8 +104,14 @@ namespace AsyncPoco
 		/// </remarks>
 		public Database(string connectionString, string providerName)
 		{
-			_connectionString = connectionString;
-			_providerName = providerName;
+			_dbType = DatabaseType.Resolve(null, providerName);
+
+			_connectionFactory = () => {
+				var cn = DbProviderFactories.GetFactory(providerName).CreateConnection();
+				cn.ConnectionString = connectionString;
+				return cn;
+			};
+
 			CommonConstruct();
 		}
 
@@ -100,8 +122,14 @@ namespace AsyncPoco
 		/// <param name="provider">The DbProviderFactory to use for instantiating DbConnection's</param>
 		public Database(string connectionString, DbProviderFactory provider)
 		{
-			_connectionString = connectionString;
-			_factory = provider;
+			_dbType = DatabaseType.Resolve(provider.GetType().Name, null);
+
+			_connectionFactory = () => {
+				var cn = provider.CreateConnection();
+				cn.ConnectionString = connectionString;
+				return cn;
+			};
+
 			CommonConstruct();
 		}
 
@@ -110,29 +138,25 @@ namespace AsyncPoco
 		///     read from app/web.config.
 		/// </summary>
 		/// <param name="connectionStringName">The name of the connection</param>
-		public Database(string connectionStringName)
-		{
-			// Use first?
-			if (connectionStringName == "")
-				connectionStringName = ConfigurationManager.ConnectionStrings[0].Name;
+		public Database(string connectionStringName) {
+			if (string.IsNullOrEmpty(connectionStringName))
+				throw new ArgumentNullException(nameof(connectionStringName));
 
-			// Work out connection string and provider name
-			var providerName = "System.Data.SqlClient";
-			if (ConfigurationManager.ConnectionStrings[connectionStringName] != null)
-			{
-				if (!string.IsNullOrEmpty(ConfigurationManager.ConnectionStrings[connectionStringName].ProviderName))
-					providerName = ConfigurationManager.ConnectionStrings[connectionStringName].ProviderName;
-			}
-			else
-			{
-				throw new InvalidOperationException("Can't find a connection string with the name '" + connectionStringName + "'");
-			}
+			var cs = System.Configuration.ConfigurationManager.ConnectionStrings[connectionStringName];
+			if (cs == null)
+				throw new ArgumentException($"Can't find a connection string with the name '{connectionStringName}'");
 
-			// Store factory and connection string
-			_connectionString = ConfigurationManager.ConnectionStrings[connectionStringName].ConnectionString;
-			_providerName = providerName;
+			_dbType = DatabaseType.Resolve(null, cs.ProviderName);
+
+			_connectionFactory = () => {
+				var cn = DbProviderFactories.GetFactory(cs.ProviderName).CreateConnection();
+				cn.ConnectionString = cs.ConnectionString;
+				return cn;
+			};
+
 			CommonConstruct();
 		}
+#endif
 
 		/// <summary>
 		///     Provides common initialization for the various constructors
@@ -143,22 +167,11 @@ namespace AsyncPoco
 			_transactionDepth = 0;
 			EnableAutoSelect = true;
 			EnableNamedParams = true;
-
-			// If a provider name was supplied, get the DbProviderFactory for it
-			if (_providerName != null)
-				_factory = DbProviderFactories.GetFactory(_providerName);
-
-			// Resolve the DB Type
-			var DBTypeName = (_factory == null ? _sharedConnection.GetType() : _factory.GetType()).Name;
-			_dbType = DatabaseType.Resolve(DBTypeName, _providerName);
-
-			// What character is used for delimiting parameters in SQL
-			_paramPrefix = _dbType.GetParameterPrefix(_connectionString);
 		}
 
-		#endregion
+#endregion
 
-		#region Connection Management
+#region Connection Management
 
 		/// <summary>
 		///     When set to true the first opened connection is kept alive until this object is disposed
@@ -175,8 +188,7 @@ namespace AsyncPoco
 		{
 			if (_sharedConnectionDepth == 0)
 			{
-				_sharedConnection = _factory.CreateConnection();
-				_sharedConnection.ConnectionString = _connectionString;
+				_sharedConnection = _connectionFactory();
 
 				if (_sharedConnection.State == ConnectionState.Broken)
 					_sharedConnection.Close();
@@ -212,14 +224,14 @@ namespace AsyncPoco
 		/// <summary>
 		///     Provides access to the currently open shared connection (or null if none)
 		/// </summary>
-		public IDbConnection Connection
+		public DbConnection Connection
 		{
 			get { return _sharedConnection; }
 		}
 
-		#endregion
+#endregion
 
-		#region Transaction Management
+#region Transaction Management
 
 		// Helper to create a transaction scope
 
@@ -317,9 +329,9 @@ namespace AsyncPoco
 				CleanupTransaction();
 		}
 
-		#endregion
+#endregion
 
-		#region Command Management
+#region Command Management
 
 		/// <summary>
 		///     Add a parameter to a DB command
@@ -342,14 +354,14 @@ namespace AsyncPoco
 			var idbParam = value as IDbDataParameter;
 			if (idbParam != null)
 			{
-				idbParam.ParameterName = string.Format("{0}{1}", _paramPrefix, cmd.Parameters.Count);
+				idbParam.ParameterName = string.Format("{0}{1}", _dbType.ParameterPrefix, cmd.Parameters.Count);
 				cmd.Parameters.Add(idbParam);
 				return;
 			}
 
 			// Create the parameter
 			var p = cmd.CreateParameter();
-			p.ParameterName = string.Format("{0}{1}", _paramPrefix, cmd.Parameters.Count);
+			p.ParameterName = string.Format("{0}{1}", _dbType.ParameterPrefix, cmd.Parameters.Count);
 
 			// Assign the parmeter value
 			if (value == null)
@@ -362,7 +374,7 @@ namespace AsyncPoco
 				value = _dbType.MapParameterValue(value);
 
 				var t = value.GetType();
-				if (t.IsEnum) // PostgreSQL .NET driver wont cast enum to int
+				if (t.GetTypeInfo().IsEnum) // PostgreSQL .NET driver wont cast enum to int
 				{
 					p.Value = (int)value;
 				}
@@ -424,8 +436,8 @@ namespace AsyncPoco
 			}
 
 			// Perform parameter prefix replacements
-			if (_paramPrefix != "@")
-				sql = rxParamsPrefix.Replace(sql, m => _paramPrefix + m.Value.Substring(1));
+			if (_dbType.ParameterPrefix != "@")
+				sql = rxParamsPrefix.Replace(sql, m => _dbType.ParameterPrefix + m.Value.Substring(1));
 			sql = sql.Replace("@@", "@"); // <- double @@ escapes a single @
 
 			// Create the command and add parameters
@@ -448,9 +460,9 @@ namespace AsyncPoco
 			return cmd;
 		}
 
-		#endregion
+#endregion
 
-		#region Exception Reporting and Logging
+#region Exception Reporting and Logging
 
 		/// <summary>
 		///     Called if an exception occurs during processing of a DB operation.  Override to provide custom logging/handling.
@@ -482,7 +494,7 @@ namespace AsyncPoco
 		///     Called when DB connection closed
 		/// </summary>
 		/// <param name="conn">The soon to be closed IDBConnection</param>
-		public virtual void OnConnectionClosing(IDbConnection conn)
+		public virtual void OnConnectionClosing(DbConnection conn)
 		{
 		}
 
@@ -506,9 +518,9 @@ namespace AsyncPoco
 		{
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Execute 
+#region operation: Execute 
 
 		/// <summary>
 		///     Executes a non-query command
@@ -553,9 +565,9 @@ namespace AsyncPoco
 			return ExecuteAsync(sql.SQL, sql.Arguments);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: ExecuteScalarAsync
+#region operation: ExecuteScalarAsync
 
 		/// <summary>
 		///     Executes a query and return the first column of the first row in the result set.
@@ -608,9 +620,9 @@ namespace AsyncPoco
 			return ExecuteScalarAsync<T>(sql.SQL, sql.Arguments);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Fetch
+#region operation: Fetch
 
 		/// <summary>
 		///     Runs a query and returns the result set as a typed list
@@ -637,9 +649,9 @@ namespace AsyncPoco
 			return FetchAsync<T>(sql.SQL, sql.Arguments);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Page
+#region operation: Page
 
 		/// <summary>
 		///     Starting with a regular SELECT statement, derives the SQL statements required to query a
@@ -769,9 +781,9 @@ namespace AsyncPoco
 			return PageAsync<T>(page, itemsPerPage, sqlCount.SQL, sqlCount.Arguments, sqlPage.SQL, sqlPage.Arguments);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Fetch (page)
+#region operation: Fetch (page)
 
 		/// <summary>
 		///     Retrieves a page of records (without the total count)
@@ -808,9 +820,9 @@ namespace AsyncPoco
 			return SkipTakeAsync<T>((page - 1) * itemsPerPage, itemsPerPage, sql.SQL, sql.Arguments);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: SkipTakeAsync
+#region operation: SkipTakeAsync
 
 		/// <summary>
 		///     Retrieves a range of records from result set
@@ -849,9 +861,9 @@ namespace AsyncPoco
 			return SkipTakeAsync<T>(skip, take, sql.SQL, sql.Arguments);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Query
+#region operation: Query
 
 		/// <summary>
 		///     Runs an SQL query, asynchronously passing each result to a callback
@@ -1008,9 +1020,9 @@ namespace AsyncPoco
 			return QueryAsync(sql.SQL, sql.Arguments, func);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Exists
+#region operation: Exists
 
 		/// <summary>
 		///     Checks for the existance of a row matching the specified condition
@@ -1039,9 +1051,9 @@ namespace AsyncPoco
 			return ExistsAsync<T>(BuildPrimaryKeySql(pk, ref index), pk.Select(x => x.Value).ToArray());
 		}
 
-		#endregion
+#endregion
 
-		#region operation: linq style (Exists, Single, SingleOrDefault etc...)
+#region operation: linq style (Exists, Single, SingleOrDefault etc...)
 
 		/// <summary>
 		///     Returns the record with the specified primary key value
@@ -1214,9 +1226,9 @@ namespace AsyncPoco
 			return FirstOrDefaultAsync<T>(sql.SQL, sql.Arguments);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Insert
+#region operation: Insert
 
 		/// <summary>
 		///     Performs an SQL Insert
@@ -1280,7 +1292,7 @@ namespace AsyncPoco
 							}
 
 							names.Add(_dbType.EscapeSqlIdentifier(i.Key));
-							values.Add(string.Format("{0}{1}", _paramPrefix, index++));
+							values.Add(string.Format("{0}{1}", _dbType.ParameterPrefix, index++));
 							AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
 						}
 
@@ -1355,9 +1367,9 @@ namespace AsyncPoco
 			return InsertAsync(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, pd.TableInfo.AutoIncrement, poco);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Update
+#region operation: Update
 
 		/// <summary>
 		///     Performs an SQL update
@@ -1419,7 +1431,7 @@ namespace AsyncPoco
 								// Build the sql
 								if (index > 0)
 									sb.Append(", ");
-								sb.AppendFormat("{0} = {1}{2}", _dbType.EscapeSqlIdentifier(i.Key), _paramPrefix, index++);
+								sb.AppendFormat("{0} = {1}{2}", _dbType.EscapeSqlIdentifier(i.Key), _dbType.ParameterPrefix, index++);
 
 								// Store the parameter in the command
 								AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
@@ -1434,7 +1446,7 @@ namespace AsyncPoco
 								// Build the sql
 								if (index > 0)
 									sb.Append(", ");
-								sb.AppendFormat("{0} = {1}{2}", _dbType.EscapeSqlIdentifier(colname), _paramPrefix, index++);
+								sb.AppendFormat("{0} = {1}{2}", _dbType.EscapeSqlIdentifier(colname), _dbType.ParameterPrefix, index++);
 
 								// Store the parameter in the command
 								AddParam(cmd, pc.GetValue(poco), pc.PropertyInfo);
@@ -1571,9 +1583,9 @@ namespace AsyncPoco
 			return ExecuteAsync(new Sql(string.Format("UPDATE {0}", _dbType.EscapeTableName(pd.TableInfo.TableName))).Append(sql));
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Delete
+#region operation: Delete
 
 		/// <summary>
 		///     Performs and SQL Delete
@@ -1678,9 +1690,9 @@ namespace AsyncPoco
 				ExecuteAsync(new Sql(string.Format("DELETE FROM {0}", _dbType.EscapeTableName(pd.TableInfo.TableName))).Append(sql));
 		}
 
-		#endregion
+#endregion
 
-		#region operation: IsNew
+#region operation: IsNew
 
 		/// <summary>
 		///     Check if a poco represents a new row
@@ -1718,7 +1730,7 @@ namespace AsyncPoco
 
 			var type = pk.GetType();
 
-			if (type.IsValueType)
+			if (type.GetTypeInfo().IsValueType)
 			{
 				// Common primary key types
 				if (type == typeof(long))
@@ -1753,9 +1765,9 @@ namespace AsyncPoco
 			return IsNew(pd.TableInfo.PrimaryKey, poco);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Save
+#region operation: Save
 
 		/// <summary>
 		///     Saves a POCO by either performing either an SQL Insert or SQL Update
@@ -1782,9 +1794,9 @@ namespace AsyncPoco
 			return SaveAsync(pd.TableInfo.TableName, pd.TableInfo.PrimaryKey, poco);
 		}
 
-		#endregion
+#endregion
 
-		#region operation: Multi-Poco Query/Fetch
+#region operation: Multi-Poco Query/Fetch
 
 		/// <summary>
 		///     Perform a multi-poco fetch
@@ -2222,9 +2234,9 @@ namespace AsyncPoco
 			}
 		}
 
-		#endregion
+#endregion
 
-		#region Last Command
+#region Last Command
 
 		/// <summary>
 		///     Retrieves the SQL of the last executed statement
@@ -2244,9 +2256,9 @@ namespace AsyncPoco
 			get { return FormatCommand(LastSQL, LastArgs); }
 		}
 
-		#endregion
+#endregion
 
-		#region FormatCommand
+#region FormatCommand
 
 		/// <summary>
 		///     Formats the contents of a DB command for display
@@ -2276,16 +2288,16 @@ namespace AsyncPoco
 				sb.Append("\n");
 				for (var i = 0; i < args.Length; i++)
 				{
-					sb.AppendFormat("\t -> {0}{1} [{2}] = \"{3}\"\n", _paramPrefix, i, args[i].GetType().Name, args[i]);
+					sb.AppendFormat("\t -> {0}{1} [{2}] = \"{3}\"\n", _dbType.ParameterPrefix, i, args[i].GetType().Name, args[i]);
 				}
 				sb.Remove(sb.Length - 1, 1);
 			}
 			return sb.ToString();
 		}
 
-		#endregion
+#endregion
 
-		#region Public Properties
+#region Public Properties
 
 		/*
 		public static IMapper Mapper
@@ -2315,25 +2327,22 @@ namespace AsyncPoco
 		/// </summary>
 		public int OneTimeCommandTimeout { get; set; }
 
-		#endregion
+#endregion
 
-		#region Member Fields
+#region Member Fields
 
 		// Member variables
 		internal DatabaseType _dbType;
-		private readonly string _connectionString;
-		private readonly string _providerName;
-		private DbProviderFactory _factory;
+		private Func<DbConnection> _connectionFactory;
 		private DbConnection _sharedConnection;
 		private DbTransaction _transaction;
 		private int _sharedConnectionDepth;
 		private int _transactionDepth;
 		private bool _transactionCancelled;
-		private string _paramPrefix;
 
-		#endregion
+#endregion
 
-		#region Internal operations
+#region Internal operations
 
 		internal async Task ExecuteNonQueryHelperAsync(DbCommand cmd)
 		{
@@ -2371,9 +2380,9 @@ namespace AsyncPoco
 			LastArgs = (from IDataParameter parameter in cmd.Parameters select parameter.Value).ToArray();
 		}
 
-		#endregion
+#endregion
 
-		#region Composite primary key support
+#region Composite primary key support
 
 		private Dictionary<string, object> GetPrimaryKeyValues(string primaryKeyName, object primaryKeyValue)
 		{
@@ -2420,9 +2429,9 @@ namespace AsyncPoco
 					(x, i) =>
 						x.Value == null || x.Value == DBNull.Value
 							? $"{_dbType.EscapeSqlIdentifier(x.Key)} IS NULL"
-							: $"{_dbType.EscapeSqlIdentifier(x.Key)} = {_paramPrefix}{tempIndex + i}").ToArray());
+							: $"{_dbType.EscapeSqlIdentifier(x.Key)} = {_dbType.ParameterPrefix}{tempIndex + i}").ToArray());
 		}
 
-		#endregion
+#endregion
 	}
 }

@@ -1,31 +1,85 @@
 ﻿using System;
+using System.Data.SqlClient;
+using System.Data.SqlServerCe;
+using System.Data.SQLite;
 using System.Linq;
 using System.Threading.Tasks;
+using MySql.Data.MySqlClient;
+using Npgsql;
 using NUnit.Framework;
 
 namespace AsyncPoco.Tests
 {
+#if NET45
+	public class DatabaseTestsByConnStrName : DatabaseTests
+	{
+		public DatabaseTestsByConnStrName(string connStrName) : base(connStrName) { }
+
+		protected override Database GetDatabase(string connStrName) => new Database(connStrName);
+	}
+#endif
+
+	public class DatabaseTestsByConnType : DatabaseTests
+	{
+		public DatabaseTestsByConnType(string connStrName) : base(connStrName) { }
+
+		protected override Database GetDatabase(string connStrName) {
+			switch (connStrName) {
+				case "sqlserver": return Database.Create<SqlConnection>(ConnStr);
+				case "sqlserverce": return Database.Create<SqlCeConnection>(ConnStr);
+				case "mysql": return Database.Create<MySqlConnection>(ConnStr);
+				case "postgresql": return Database.Create<NpgsqlConnection>(ConnStr);
+				case "sqlite": return Database.Create<SQLiteConnection>(ConnStr);
+				default: return null;
+			}
+		}
+	}
+
+	public class DatabaseTestsByConnFactory : DatabaseTests
+	{
+		public DatabaseTestsByConnFactory(string connStrName) : base(connStrName) { }
+
+		protected override Database GetDatabase(string connStrName) {
+			switch (connStrName) {
+				case "sqlserver": return Database.Create(() => new SqlConnection(ConnStr));
+				case "sqlserverce": return Database.Create(() => new SqlCeConnection(ConnStr));
+				case "mysql": return Database.Create(() => new MySqlConnection(ConnStr));
+				case "postgresql": return Database.Create(() => new NpgsqlConnection(ConnStr));
+				case "sqlite": return Database.Create(() => new SQLiteConnection(ConnStr));
+				default: return null;
+			}
+		}
+	}
+
 	[TestFixture("sqlserver")]
-	[TestFixture("sqlserverce")]
 	[TestFixture("mysql")]
 	[TestFixture("postgresql")]
 	[TestFixture("sqlite")]
-	public class DatabaseTests
+#if NET45
+	[TestFixture("sqlserverce")]
+#endif
+	public abstract class DatabaseTests
 	{
-		public DatabaseTests(string connectionStringName)
-		{
-			_connectionStringName = connectionStringName;
-		}
-
-		string _connectionStringName;
+		protected string ConnStrName { get; set; }
+		protected string ConnStr { get; set; }
+	
 		Random r = new Random();
 		Database db;
+
+		public DatabaseTests(string connStrName)
+		{
+			ConnStrName = connStrName;
+			ConnStr = ConnectionStrings.Get(connStrName);
+		}
+
+		protected abstract Database GetDatabase(string connStrName);
 
 		[OneTimeSetUp]
 		public async Task CreateDbAsync()
 		{
-			db = new Database(_connectionStringName);
-			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{_connectionStringName}_init.sql");
+			// db = new Database(_connectionStringName);
+			db = GetDatabase(ConnStrName);
+			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{ConnStrName}_init.sql");
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
@@ -33,7 +87,7 @@ namespace AsyncPoco.Tests
 		[OneTimeTearDown]
 		public async Task DeleteDbAsync()
 		{
-			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{_connectionStringName}_done.sql");
+			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{ConnStrName}_done.sql");
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
@@ -292,7 +346,7 @@ namespace AsyncPoco.Tests
 		public async Task Page_NoOrderBy()
 		{
 			// Unordered paging not supported by Compact Edition
-			if (_connectionStringName == "sqlserverce")
+			if (ConnStrName == "sqlserverce")
 				return;
 			// In this test we're checking that the page count is correct when there are
 			// not-exactly pagesize*N records (ie: a partial page at the end)
@@ -324,7 +378,7 @@ namespace AsyncPoco.Tests
 		public async Task Page_Distinct()
 		{
 			// Unordered paging not supported by Compact Edition
-			if (_connectionStringName == "sqlserverce")
+			if (ConnStrName == "sqlserverce")
 				return;
 			// In this test we're checking that the page count is correct when there are
 			// not-exactly pagesize*N records (ie: a partial page at the end)

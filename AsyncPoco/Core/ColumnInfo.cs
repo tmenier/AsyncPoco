@@ -62,10 +62,10 @@ namespace AsyncPoco
 		public static ColumnInfo FromProperty(PropertyInfo pi)
 		{
 			// Check if declaring poco has [Explicit] attribute
-			bool ExplicitColumns = pi.DeclaringType.GetCustomAttributes(typeof(ExplicitColumnsAttribute), true).Length > 0;
+			bool ExplicitColumns = pi.DeclaringType.GetTypeInfo().GetCustomAttributes(typeof(ExplicitColumnsAttribute), true).Any();
 
 			// Check for [Column]/[Ignore] Attributes
-			var ColAttrs = pi.GetCustomAttributes(typeof(ColumnAttribute), true);
+			var ColAttrs = pi.GetCustomAttributes(typeof(ColumnAttribute), true).ToArray();
 			if (ExplicitColumns)
 			{
 				if (ColAttrs.Length == 0)
@@ -73,7 +73,7 @@ namespace AsyncPoco
 			}
 			else
 			{
-				if (pi.GetCustomAttributes(typeof(IgnoreAttribute), true).Length != 0)
+				if (pi.GetCustomAttributes(typeof(IgnoreAttribute), true).Any())
 					return null;
 			}
 

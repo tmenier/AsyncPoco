@@ -1,6 +1,7 @@
 ﻿using NUnit.Framework;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MySql.Data.MySqlClient;
 
 namespace AsyncPoco.Tests
 {
@@ -40,7 +41,7 @@ namespace AsyncPoco.Tests
 		[OneTimeSetUp]
 		public async Task CreateDbAsync()
 		{
-			db = new Database(_connectionStringName);
+			db = Database.Create<MySqlConnection>(ConnectionStrings.Get(_connectionStringName));
 			await db.ExecuteAsync(@"
 
 DROP TABLE IF EXISTS posts;

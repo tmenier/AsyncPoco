@@ -9,12 +9,13 @@ using System.Collections.Generic;
 using System.Reflection.Emit;
 using System.Linq.Expressions;
 using System.Data;
+using System.Reflection;
 
 namespace AsyncPoco.Internal
 {
 	class MultiPocoFactory
 	{
-		public static IEqualityComparer<string> FieldNameComparer { get; set; } = StringComparer.InvariantCultureIgnoreCase;
+		public static IEqualityComparer<string> FieldNameComparer { get; set; } = StringComparer.OrdinalIgnoreCase;
 
 		// Instance data used by the Multipoco factory delegate - essentially a list of the nested poco factories to call
 		List<Delegate> _delegates;

@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Data;
+using System.Globalization;
 using System.Threading.Tasks;
 using AsyncPoco.DatabaseTypes;
 using AsyncPoco.Internal;
@@ -18,12 +19,7 @@ namespace AsyncPoco.Internal
 		/// <summary>
 		/// Returns the prefix used to delimit parameters in SQL query strings.
 		/// </summary>
-		/// <param name="ConnectionString"></param>
-		/// <returns></returns>
-		public virtual string GetParameterPrefix(string ConnectionString)
-		{
-			return "@";
-		}
+		public virtual string ParameterPrefix { get; } = "@";
 
 		/// <summary>
 		/// Converts a supplied C# object value into a value suitable for passing to the database
@@ -157,15 +153,15 @@ namespace AsyncPoco.Internal
 
 			// Try again with provider name
 			if (!string.IsNullOrEmpty(ProviderName)) {
-				if (ProviderName.IndexOf("MySql", StringComparison.InvariantCultureIgnoreCase) >= 0)
+				if (ProviderName.IndexOf("MySql", StringComparison.OrdinalIgnoreCase) >= 0)
 					return Singleton<MySqlDatabaseType>.Instance;
-				if (ProviderName.IndexOf("SqlServerCe", StringComparison.InvariantCultureIgnoreCase) >= 0)
+				if (ProviderName.IndexOf("SqlServerCe", StringComparison.OrdinalIgnoreCase) >= 0)
 					return Singleton<SqlServerCEDatabaseType>.Instance;
-				if (ProviderName.IndexOf("pgsql", StringComparison.InvariantCultureIgnoreCase) >= 0)
+				if (ProviderName.IndexOf("pgsql", StringComparison.OrdinalIgnoreCase) >= 0)
 					return Singleton<PostgreSQLDatabaseType>.Instance;
-				if (ProviderName.IndexOf("Oracle", StringComparison.InvariantCultureIgnoreCase) >= 0)
+				if (ProviderName.IndexOf("Oracle", StringComparison.OrdinalIgnoreCase) >= 0)
 					return Singleton<OracleDatabaseType>.Instance;
-				if (ProviderName.IndexOf("SQLite", StringComparison.InvariantCultureIgnoreCase) >= 0)
+				if (ProviderName.IndexOf("SQLite", StringComparison.OrdinalIgnoreCase) >= 0)
 					return Singleton<SQLiteDatabaseType>.Instance;
 			}
 
