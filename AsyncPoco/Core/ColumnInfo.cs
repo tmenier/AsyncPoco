@@ -54,6 +54,18 @@ namespace AsyncPoco
 			set;
 		}
 
+	    public string InsertTemplate
+	    {
+	        get;
+	        set;
+	    }
+
+	    public string UpdateTemplate
+	    {
+	        get;
+	        set;
+	    }
+
 		/// <summary>
 		/// Creates and populates a ColumnInfo from the attributes of a POCO property.
 		/// </summary>
@@ -86,6 +98,8 @@ namespace AsyncPoco
 
 				ci.ColumnName = colattr.Name==null ? pi.Name : colattr.Name;
 				ci.ForceToUtc = colattr.ForceToUtc;
+			    ci.InsertTemplate = colattr.InsertTemplate;
+			    ci.UpdateTemplate = colattr.UpdateTemplate;
 				if ((colattr as ResultColumnAttribute) != null)
 					ci.ResultColumn = true;
 				if ((colattr as ComputedColumnAttribute) != null)

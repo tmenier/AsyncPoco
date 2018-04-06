@@ -10,7 +10,9 @@ namespace AsyncPoco.Tests
 		public string prop2 { get; set; }
 		public string prop3 { get; set; }
 		public string prop4 { get; set; }
-	}
+	    public string prop5 { get; set; }
+	    public string prop6 { get; set; }
+    }
 
 	public class MyColumnMapper : AsyncPoco.IMapper
 	{
@@ -53,6 +55,14 @@ namespace AsyncPoco.Tests
 					case "prop4":
 						// Ignore this property
 						return null;
+
+                    case "prop5":
+                        ci.InsertTemplate = "custom";
+                        break;
+
+                    case "prop6":
+                        ci.UpdateTemplate = "custom";
+                        break;
 				}
 			}
 
@@ -88,7 +98,9 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(pd.Columns["prop1"].PropertyInfo.Name, "prop1");
 			Assert.AreEqual(pd.Columns["remapped2"].ColumnName, "remapped2");
 			Assert.AreEqual(pd.Columns["prop3"].ColumnName, "prop3");
-			Assert.AreEqual(string.Join(", ", pd.QueryColumns), "prop1, remapped2");
+			Assert.AreEqual(pd.Columns["prop5"].InsertTemplate, "custom");
+			Assert.AreEqual(pd.Columns["prop6"].UpdateTemplate, "custom");
+            Assert.AreEqual(string.Join(", ", pd.QueryColumns), "prop1, remapped2");
 			Assert.AreEqual(pd.TableInfo.PrimaryKey, "id");
 			Assert.AreEqual(pd.TableInfo.TableName, "petapoco");
 

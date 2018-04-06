@@ -78,6 +78,8 @@ namespace AsyncPoco.Internal
 				pc.ResultColumn = ci.ResultColumn;
 				pc.ComputedColumn = ci.ComputedColumn;
 				pc.ForceToUtc = ci.ForceToUtc;
+			    pc.InsertTemplate = ci.InsertTemplate;
+			    pc.UpdateTemplate = ci.UpdateTemplate;
 
 				// Store it
 				Columns.Add(pc.ColumnName, pc);

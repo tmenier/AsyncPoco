@@ -1292,7 +1292,7 @@ namespace AsyncPoco
 							}
 
 							names.Add(_dbType.EscapeSqlIdentifier(i.Key));
-							values.Add(string.Format("{0}{1}", _dbType.ParameterPrefix, index++));
+							values.Add(string.Format(i.Value.InsertTemplate ?? "{0}{1}", _dbType.ParameterPrefix, index++));
 							AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
 						}
 
@@ -1431,7 +1431,7 @@ namespace AsyncPoco
 								// Build the sql
 								if (index > 0)
 									sb.Append(", ");
-								sb.AppendFormat("{0} = {1}{2}", _dbType.EscapeSqlIdentifier(i.Key), _dbType.ParameterPrefix, index++);
+								sb.AppendFormat(i.Value.UpdateTemplate ?? "{0} = {1}{2}", _dbType.EscapeSqlIdentifier(i.Key), _dbType.ParameterPrefix, index++);
 
 								// Store the parameter in the command
 								AddParam(cmd, i.Value.GetValue(poco), i.Value.PropertyInfo);
@@ -1446,7 +1446,7 @@ namespace AsyncPoco
 								// Build the sql
 								if (index > 0)
 									sb.Append(", ");
-								sb.AppendFormat("{0} = {1}{2}", _dbType.EscapeSqlIdentifier(colname), _dbType.ParameterPrefix, index++);
+								sb.AppendFormat(pc.UpdateTemplate ?? "{0} = {1}{2}", _dbType.EscapeSqlIdentifier(colname), _dbType.ParameterPrefix, index++);
 
 								// Store the parameter in the command
 								AddParam(cmd, pc.GetValue(poco), pc.PropertyInfo);

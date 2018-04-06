@@ -35,6 +35,17 @@ namespace AsyncPoco
 			get;
 			set;
 		}
-	}
 
+	    public string InsertTemplate
+	    {
+	        get;
+	        set;
+	    }
+
+	    public string UpdateTemplate
+	    {
+	        get;
+	        set;
+	    }
+	}
 }
