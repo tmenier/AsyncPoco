@@ -19,7 +19,6 @@ namespace AsyncPoco.Internal
 		public static PocoData ForObject(object o, string primaryKeyName)
 		{
 			var t = o.GetType();
-#if !PETAPOCO_NO_DYNAMIC
 			if (t == typeof(System.Dynamic.ExpandoObject))
 			{
 				var pd = new PocoData();
@@ -36,16 +35,13 @@ namespace AsyncPoco.Internal
 				return pd;
 			}
 			else
-#endif
 				return ForType(t);
 		}
 
 		public static PocoData ForType(Type t)
 		{
-#if !PETAPOCO_NO_DYNAMIC
 			if (t == typeof(System.Dynamic.ExpandoObject))
 				throw new InvalidOperationException("Can't use dynamic types with this method");
-#endif
 
 			return _pocoDatas.Get(t, () => new PocoData(t));
 		}
@@ -124,7 +120,6 @@ namespace AsyncPoco.Internal
 				var il = m.GetILGenerator();
 				var mapper = Mappers.GetMapper(type);
 
-#if !PETAPOCO_NO_DYNAMIC
 				if (type == typeof(object))
 				{
 					il.Emit(OpCodes.Newobj, typeof(System.Dynamic.ExpandoObject).GetConstructor(Type.EmptyTypes));			// obj
@@ -181,7 +176,6 @@ namespace AsyncPoco.Internal
 					}
 				}
 				else
-#endif
 					if (type.GetTypeInfo().IsValueType || type == typeof(string) || type == typeof(byte[]))
 					{
 						// Do we need to install a converter?

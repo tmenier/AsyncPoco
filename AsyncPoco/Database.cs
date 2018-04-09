@@ -10,8 +10,6 @@
  * and Adam Schroder (@schotime) for lots of suggestions, improvements and Oracle support
  */
 
-// Define PETAPOCO_NO_DYNAMIC in your project settings on .NET 3.5
-
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -1566,11 +1564,9 @@ namespace AsyncPoco
 			if (pd.Columns.TryGetValue(primaryKeyName, out pc)) {
 				pk = pc.GetValue(poco);
 			}
-#if !PETAPOCO_NO_DYNAMIC
 			else if (poco.GetType() == typeof(ExpandoObject)) {
 				return true;
 			}
-#endif
 			else {
 				var pi = poco.GetType().GetProperty(primaryKeyName);
 				if (pi == null)
