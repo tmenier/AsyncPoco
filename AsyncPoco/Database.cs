@@ -57,12 +57,22 @@ namespace AsyncPoco
 
 		#region Constructors
 
+		/// <summary>
+		/// Creates a new Database instance where the provided DbConnection type defines the specific platform, i.e. SqlConnection, OracleConnection, MySqlConnection, etc.
+		/// </summary>
+		/// <typeparam name="TDbConnection">A concrete type that implements DbConnection.</typeparam>
+		/// <param name="connectionString">The DB connection string.</param>
 		public static Database Create<TDbConnection>(string connectionString) where TDbConnection : DbConnection, new() {
 			var dbType = DatabaseType.Resolve(typeof(TDbConnection).Name, null);
 			return new Database(dbType, () => new TDbConnection { ConnectionString = connectionString });
 		}
 
-		public static Database Create<TDbConnection>(Func<TDbConnection> createConnection) where TDbConnection : DbConnection, new() {
+		/// <summary>
+		/// Creates a new Database instance where creation of the DbConneciton is delegated to the provided callback and deferred until needed.
+		/// </summary>
+		/// <param name="createConnection">A Func that returns a DbConnection instance.</param>
+		/// <remarks>Generally the callback should create but not open the connection.</remarks>
+		public static Database Create<TDbConnection>(Func<TDbConnection> createConnection) where TDbConnection : DbConnection {
 			var dbType = DatabaseType.Resolve(typeof(TDbConnection).Name, null);
 			return new Database(dbType, createConnection);
 		}
@@ -78,8 +88,7 @@ namespace AsyncPoco
 		/// </summary>
 		/// <param name="connection">The DbConnection to use</param>
 		/// <remarks>
-		/// The supplied DbConnection will not be closed/disposed by PetaPoco - that remains
-		/// the responsibility of the caller.
+		/// The supplied DbConnection will not be closed/disposed by AsyncPoco - that remains the responsibility of the caller.
 		/// </remarks>
 		public Database(DbConnection connection) {
 			_dbType = DatabaseType.Resolve(connection.GetType().Name, null);
