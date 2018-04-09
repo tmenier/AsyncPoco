@@ -1,11 +1,15 @@
 ﻿using System;
 using System.Data.SqlClient;
-using System.Data.SqlServerCe;
+#if !NETCOREAPP1_0
+using Npgsql;
 using System.Data.SQLite;
+#endif
+#if NET45
+using System.Data.SqlServerCe;
+#endif
 using System.Linq;
 using System.Threading.Tasks;
 using MySql.Data.MySqlClient;
-using Npgsql;
 using NUnit.Framework;
 
 namespace AsyncPoco.Tests
@@ -26,10 +30,14 @@ namespace AsyncPoco.Tests
 		protected override Database GetDatabase(string connStrName) {
 			switch (connStrName) {
 				case "sqlserver": return Database.Create<SqlConnection>(ConnStr);
-				case "sqlserverce": return Database.Create<SqlCeConnection>(ConnStr);
 				case "mysql": return Database.Create<MySqlConnection>(ConnStr);
+#if !NETCOREAPP1_0
 				case "postgresql": return Database.Create<NpgsqlConnection>(ConnStr);
 				case "sqlite": return Database.Create<SQLiteConnection>(ConnStr);
+#endif
+#if NET45
+				case "sqlserverce": return Database.Create<SqlCeConnection>(ConnStr);
+#endif
 				default: return null;
 			}
 		}
@@ -42,10 +50,14 @@ namespace AsyncPoco.Tests
 		protected override Database GetDatabase(string connStrName) {
 			switch (connStrName) {
 				case "sqlserver": return Database.Create(() => new SqlConnection(ConnStr));
-				case "sqlserverce": return Database.Create(() => new SqlCeConnection(ConnStr));
 				case "mysql": return Database.Create(() => new MySqlConnection(ConnStr));
+#if !NETCOREAPP1_0
 				case "postgresql": return Database.Create(() => new NpgsqlConnection(ConnStr));
 				case "sqlite": return Database.Create(() => new SQLiteConnection(ConnStr));
+#endif
+#if NET45
+				case "sqlserverce": return Database.Create(() => new SqlCeConnection(ConnStr));
+#endif
 				default: return null;
 			}
 		}
@@ -53,8 +65,10 @@ namespace AsyncPoco.Tests
 
 	[TestFixture("sqlserver")]
 	[TestFixture("mysql")]
+#if !NETCOREAPP1_0
 	[TestFixture("postgresql")]
 	[TestFixture("sqlite")]
+#endif
 #if NET45
 	[TestFixture("sqlserverce")]
 #endif
