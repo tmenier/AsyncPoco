@@ -5,22 +5,23 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="petapoco.sdf">
+		<ContentWithTargetPath Include="SqlServerCE\petapoco.sdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+	    <TargetPath>petapoco.sdf</TargetPath>
+    </ContentWithTargetPath>
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="mysql_done.sql" />
-    <EmbeddedResource Include="mysql_init.sql" />
-    <EmbeddedResource Include="postgresql_done.sql" />
-    <EmbeddedResource Include="postgresql_init.sql" />
-    <EmbeddedResource Include="sqlite_done.sql" />
-    <EmbeddedResource Include="sqlite_init.sql" />
-    <EmbeddedResource Include="sqlserverce_done.sql" />
-    <EmbeddedResource Include="sqlserverce_init.sql" />
-    <EmbeddedResource Include="sqlserver_done.sql" />
-    <EmbeddedResource Include="sqlserver_init.sql" />
+    <EmbeddedResource Include="MySql\mysql_done.sql" />
+    <EmbeddedResource Include="MySql\mysql_init.sql" />
+    <EmbeddedResource Include="PostgreSql\postgresql_done.sql" />
+    <EmbeddedResource Include="PostgreSql\postgresql_init.sql" />
+    <EmbeddedResource Include="SQLite\sqlite_done.sql" />
+    <EmbeddedResource Include="SQLite\sqlite_init.sql" />
+    <EmbeddedResource Include="SqlServerCE\sqlserverce_done.sql" />
+    <EmbeddedResource Include="SqlServerCE\sqlserverce_init.sql" />
+    <EmbeddedResource Include="SqlServer\sqlserver_done.sql" />
+    <EmbeddedResource Include="SqlServer\sqlserver_init.sql" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,6 +52,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Oracle\" />
     <Folder Include="Properties\" />
   </ItemGroup>
 

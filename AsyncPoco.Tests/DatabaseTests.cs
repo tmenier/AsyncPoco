@@ -1,107 +1,33 @@
 ﻿using System;
-using System.Data.SqlClient;
-#if !NETCOREAPP1_0
-using Npgsql;
-using System.Data.SQLite;
-#endif
-#if NET45
-using System.Data.SqlServerCe;
-#endif
+using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
-using MySql.Data.MySqlClient;
 using NUnit.Framework;
 
 namespace AsyncPoco.Tests
 {
-#if NET45
-	public class DatabaseTestsByConnStrName : DatabaseTests
+	[TestFixture]
+	public abstract class DatabaseTests<TConnection> where TConnection : DbConnection, new()
 	{
-		public DatabaseTestsByConnStrName(string connStrName) : base(connStrName) { }
+		protected abstract string ConnStrName { get; }
+		protected abstract string ConnStr { get; }
 
-		protected override Database GetDatabase(string connStrName) => new Database(connStrName);
-	}
-#endif
-
-	public class DatabaseTestsByConnType : DatabaseTests
-	{
-		public DatabaseTestsByConnType(string connStrName) : base(connStrName) { }
-
-		protected override Database GetDatabase(string connStrName) {
-			switch (connStrName) {
-				case "sqlserver": return Database.Create<SqlConnection>(ConnStr);
-				case "mysql": return Database.Create<MySqlConnection>(ConnStr);
-#if !NETCOREAPP1_0
-				case "postgresql": return Database.Create<NpgsqlConnection>(ConnStr);
-				case "sqlite": return Database.Create<SQLiteConnection>(ConnStr);
-#endif
-#if NET45
-				case "sqlserverce": return Database.Create<SqlCeConnection>(ConnStr);
-#endif
-				default: return null;
-			}
-		}
-	}
-
-	public class DatabaseTestsByConnFactory : DatabaseTests
-	{
-		public DatabaseTestsByConnFactory(string connStrName) : base(connStrName) { }
-
-		protected override Database GetDatabase(string connStrName) {
-			switch (connStrName) {
-				case "sqlserver": return Database.Create(() => new SqlConnection(ConnStr));
-				case "mysql": return Database.Create(() => new MySqlConnection(ConnStr));
-#if !NETCOREAPP1_0
-				case "postgresql": return Database.Create(() => new NpgsqlConnection(ConnStr));
-				case "sqlite": return Database.Create(() => new SQLiteConnection(ConnStr));
-#endif
-#if NET45
-				case "sqlserverce": return Database.Create(() => new SqlCeConnection(ConnStr));
-#endif
-				default: return null;
-			}
-		}
-	}
-
-	[TestFixture("sqlserver")]
-	[TestFixture("mysql")]
-#if !NETCOREAPP1_0
-	[TestFixture("postgresql")]
-	[TestFixture("sqlite")]
-#endif
-#if NET45
-	[TestFixture("sqlserverce")]
-#endif
-	public abstract class DatabaseTests
-	{
-		protected string ConnStrName { get; set; }
-		protected string ConnStr { get; set; }
-	
-		Random r = new Random();
-		Database db;
-
-		public DatabaseTests(string connStrName)
-		{
-			ConnStrName = connStrName;
-			ConnStr = ConnectionStrings.Get(connStrName);
-		}
-
-		protected abstract Database GetDatabase(string connStrName);
+		protected Random rand = new Random();
+		protected Database db;
 
 		[OneTimeSetUp]
-		public async Task CreateDbAsync()
+		public virtual async Task CreateDbAsync()
 		{
-			// db = new Database(_connectionStringName);
-			db = GetDatabase(ConnStrName);
-			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{ConnStrName}_init.sql");
+			db = GetDatabase();
+			var all = Utils.LoadTextResource($"{GetType().Namespace}.{ConnStrName}_init.sql");
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
 
 		[OneTimeTearDown]
-		public async Task DeleteDbAsync()
+		public virtual async Task DeleteDbAsync()
 		{
-			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{ConnStrName}_done.sql");
+			var all = Utils.LoadTextResource($"{GetType().Namespace}.{ConnStrName}_done.sql");
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
@@ -109,6 +35,10 @@ namespace AsyncPoco.Tests
 		Task<long> GetRecordCountAsync()
 		{
 			return db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM petapoco");
+		}
+
+		private Database GetDatabase() {
+			return Database.Create<TConnection>(ConnStr);
 		}
 
 		[TearDown]
@@ -130,9 +60,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			var o = new poco();
-			o.title = string.Format("insert {0}", r.Next());
+			o.title = string.Format("insert {0}", rand.Next());
 			o.draft = true;
-			o.content = string.Format("insert {0}", r.Next());
+			o.content = string.Format("insert {0}", rand.Next());
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = State.Yes;
@@ -151,9 +81,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			var o = new deco();
-			o.title = string.Format("insert {0}", r.Next());
+			o.title = string.Format("insert {0}", rand.Next());
 			o.draft = true;
-			o.content = string.Format("insert {0}", r.Next());
+			o.content = string.Format("insert {0}", rand.Next());
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = State.Maybe;
@@ -670,9 +600,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			var a = new deco();
-			a.title = string.Format("insert {0}", r.Next());
+			a.title = string.Format("insert {0}", rand.Next());
 			a.draft = true;
-			a.content = string.Format("insert {0}", r.Next());
+			a.content = string.Format("insert {0}", rand.Next());
 			a.date_created = now;
 			a.date_edited = null;
 
@@ -880,9 +810,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			dynamic o = new System.Dynamic.ExpandoObject();
-			o.title = string.Format("insert {0}", r.Next());
+			o.title = string.Format("insert {0}", rand.Next());
 			o.draft = true;
-			o.content = string.Format("insert {0}", r.Next());
+			o.content = string.Format("insert {0}", rand.Next());
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = (int)State.Maybe;

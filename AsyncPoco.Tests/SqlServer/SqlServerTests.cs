@@ -1,24 +1,26 @@
-﻿using NUnit.Framework;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using System.Data.SqlClient;
+using NUnit.Framework;
 
-namespace AsyncPoco.Tests
+namespace AsyncPoco.Tests.SqlServer
 {
-	[TestFixture]
-	class Misc
+	public class SqlServerTests : DatabaseTests<SqlConnection>
 	{
-		Database db = Database.Create<SqlConnection>(ConnectionStrings.Get("sqlserver"));
+		protected override string ConnStrName { get; } = "sqlserver";
+		protected override string ConnStr { get; } = @"Server=(LocalDB)\MSSQLLocalDB; Integrated Security=True";
 
 		[Test]
-		public void EscapeColumnName()
-		{
+		public void EscapeColumnName() {
 			Assert.AreEqual(db._dbType.EscapeSqlIdentifier("column.name"), "[column.name]");
 			Assert.AreEqual(db._dbType.EscapeSqlIdentifier("column name"), "[column name]");
 		}
 
 		[Test]
-		public void EscapeTableName()
-		{
+		public void EscapeTableName() {
 			Assert.AreEqual(db._dbType.EscapeTableName("column.name"), "column.name");
 			Assert.AreEqual(db._dbType.EscapeTableName("column name"), "[column name]");
 		}
@@ -36,8 +38,7 @@ namespace AsyncPoco.Tests
 		}
 
 		[Test]
-		public void EnumMapper()
-		{
+		public void EnumMapper() {
 			Assert.AreEqual(Fruits.Apples, Internal.EnumMapper.EnumFromString(typeof(Fruits), "Apples"));
 			Assert.AreEqual(Fruits.Pears, Internal.EnumMapper.EnumFromString(typeof(Fruits), "pears"));
 			Assert.AreEqual(Fruits.Bananas, Internal.EnumMapper.EnumFromString(typeof(Fruits), "BANANAS"));
