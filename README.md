@@ -16,9 +16,14 @@ await db.UpdateAsync<Article>("SET title = @0 WHERE article_id = @1", "New Title
 await db.SaveAsync(a);
 ```
 
-One case where the transition to AsyncPoco might be less straightforward is the `Query` method. In PetaPoco, `Query<T>` (and its various overloads) returns `IEnumerable<T>`, and its implementation `yield return`s POCOs as it streams results from the underlying DataReader. But AsyncPoco's `QueryAsync<T>` methods do not return `Task<IEnumerable<T>>`. The reason is that if you `await` a method with that signature, you will not have results to work with until the `Task` completes, meaning all results are pulled into memory, at which point you may as well `Fetch` a `List<T>`. Ideally, you want to be able to process the results asynchronously *as they become available*. So instead of returning a result that can be enumerated, `QueryAsync<T>` accepts a callback that is invoked for each POCO in the result set as it becomes available.
+One imporant note is that **the constructor in the example above is not supported in .NET Core**. In a config file, a connection string generally includes a `providerName`, which resolves to a globally registered ADO.NET provider. Unfortunately, this functionality is absent in .NET Core, so AsyncPoco requires that you pass the provider a bit more directly. This is still pretty painless; either of these will work:
 
-Example:
+```c#
+var db = Database.Create<MySqlConnection>("connectionString");
+var db = Database.Create(() => new OracleConnection("connectionString"));
+```
+
+One case where the transition to AsyncPoco might be less straightforward is the `Query` method. In PetaPoco, `Query<T>` (and its various overloads) returns `IEnumerable<T>`, and its implementation `yield return`s POCOs as it streams results from the underlying DataReader. But AsyncPoco's `QueryAsync<T>` methods do not return `Task<IEnumerable<T>>`. The reason is that if you `await` a method with that signature, you will not have results to work with until the `Task` completes, meaning all results are pulled into memory, at which point you may as well `Fetch` a `List<T>`. Ideally, you want to be able to process the results asynchronously *as they become available*. So instead of returning a result that can be enumerated, `QueryAsync<T>` accepts a callback that is invoked for each POCO in the result set as it becomes available.
 
 ```C#
 await db.QueryAsync<Article>("SELECT * FROM articles", a =>
