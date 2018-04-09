@@ -28,7 +28,7 @@ One case where the transition to AsyncPoco might be less straightforward is the 
 ```C#
 await db.QueryAsync<Article>("SELECT * FROM articles", a =>
 {
-	Console.WriteLine("{0} - {1}", a.article_id, a.title);
+    Console.WriteLine("{0} - {1}", a.article_id, a.title);
 });
 ```
 
@@ -37,15 +37,15 @@ What if you want to stop processing results before you reach the end of the Data
 ```C#
 await db.QueryAsync<Article>("SELECT * FROM articles", a =>
 {
-	if (IsWhatIWant(a))
-	{
-		Console.WriteLine("Found it! {0} - {1}", a.article_id, a.title);
-		return false; // stop iterating and close/dispose the DataReader
-	}
-	else
-	{
-		return true; // continue iterating
-	}
+    if (IsWhatIWant(a))
+    {
+        Console.WriteLine("Found it! {0} - {1}", a.article_id, a.title);
+        return false; // stop iterating and close/dispose the DataReader
+    }
+    else
+    {
+        return true; // continue iterating
+    }
 });
 ```
 
