@@ -12,6 +12,7 @@ namespace AsyncPoco.Tests.SqlServerCE
 	{
 		protected override string ConnStrName { get; } = "sqlserverce";
 		protected override string ConnStr { get; } = @"Data Source=|DataDirectory|\petapoco.sdf";
+		protected override string DbProviderName { get; } = "System.Data.SqlServerCe";
 	}
 }
 #endif

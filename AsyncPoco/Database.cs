@@ -77,7 +77,7 @@ namespace AsyncPoco
 			return new Database(dbType, createConnection);
 		}
 
-		internal Database(DatabaseType dbType, Func<DbConnection> createConnection) {
+		private Database(DatabaseType dbType, Func<DbConnection> createConnection) {
 			_dbType = dbType;
 			_connectionFactory = createConnection;
 			CommonConstruct();

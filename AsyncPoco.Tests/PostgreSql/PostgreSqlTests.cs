@@ -12,6 +12,7 @@ namespace AsyncPoco.Tests.PostgreSql
 	{
 		protected override string ConnStrName { get; } = "postgresql";
 		protected override string ConnStr { get; } = @"Server=127.0.0.1;User id=postgres;password=password01;Database=postgres;";
+		protected override string DbProviderName { get; } = "Npgsql";
 	}
 }
 #endif

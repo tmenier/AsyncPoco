@@ -12,6 +12,7 @@ namespace AsyncPoco.Tests.SqlServer
 	{
 		protected override string ConnStrName { get; } = "sqlserver";
 		protected override string ConnStr { get; } = @"Server=(LocalDB)\MSSQLLocalDB; Integrated Security=True";
+		protected override string DbProviderName { get; } = "System.Data.SqlClient";
 
 		[Test]
 		public void EscapeColumnName() {

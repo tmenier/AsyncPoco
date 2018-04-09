@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Data.Common;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
@@ -11,23 +12,56 @@ namespace AsyncPoco.Tests
 	{
 		protected abstract string ConnStrName { get; }
 		protected abstract string ConnStr { get; }
+		protected abstract string DbProviderName { get; }
 
-		protected Random rand = new Random();
+		protected static Random rand = new Random();
 		protected Database db;
+
+		private Func<Database>[] _dbFactories;
+
+		protected DatabaseTests() {
+			_dbFactories = new Func<Database>[] {
+				// one for each supported Database ctor or static Create method
+				() => Database.Create<TConnection>(ConnStr),
+				() => Database.Create(() => new TConnection { ConnectionString = ConnStr }),
+				() => {
+					var conn = new TConnection { ConnectionString = ConnStr };
+					conn.Open();
+					return new Database(conn);
+				},
+#if NET45
+				() => new Database(ConnStrName),
+				() => new Database(ConnStr, DbProviderFactories.GetFactory(DbProviderName)),
+				() => new Database(ConnStr, DbProviderName)
+#endif
+			};
+		}
+
+		private static int _dbFactoryCounter = rand.Next(10);
+
+		[SetUp]
+		public virtual void CreateDatabase() {
+			// There are 6 different ways to create a Database object. But having 6 variations of each test, for each db
+			// platform and each .NET flavor, would be obnoxious. Instead, pick one at random for the first test, then
+			// cycle through them round-robin for the rest.
+			var i = Interlocked.Increment(ref _dbFactoryCounter) % _dbFactories.Length;
+			Console.WriteLine("use factory " + i);
+			db = _dbFactories[i]();
+		}
 
 		[OneTimeSetUp]
 		public virtual async Task CreateDbAsync()
 		{
-			db = GetDatabase();
 			var all = Utils.LoadTextResource($"{GetType().Namespace}.{ConnStrName}_init.sql");
+			CreateDatabase();
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
 
 		[OneTimeTearDown]
-		public virtual async Task DeleteDbAsync()
-		{
+		public virtual async Task DeleteDbAsync() {
 			var all = Utils.LoadTextResource($"{GetType().Namespace}.{ConnStrName}_done.sql");
+			CreateDatabase();
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
@@ -35,10 +69,6 @@ namespace AsyncPoco.Tests
 		Task<long> GetRecordCountAsync()
 		{
 			return db.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM petapoco");
-		}
-
-		private Database GetDatabase() {
-			return Database.Create<TConnection>(ConnStr);
 		}
 
 		[TearDown]

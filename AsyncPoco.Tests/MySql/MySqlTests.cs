@@ -12,6 +12,7 @@ namespace AsyncPoco.Tests.MySql
 	{
 		protected override string ConnStrName { get; } = "mysql";
 		protected override string ConnStr { get; } = @"server=localhost;database=asyncpoco;user id=asyncpoco;password=asyncpoco;Allow User Variables=true";
+		protected override string DbProviderName { get; } = "MySql.Data.MySqlClient";
 
 		[TableName("posts")]
 		[PrimaryKey("id")]
@@ -58,7 +59,6 @@ CREATE TABLE authors (
 
 			");
 
-
 			var a1 = new author();
 			a1.name = "Bill";
 			await db.InsertAsync(a1);
@@ -81,7 +81,6 @@ CREATE TABLE authors (
 			p.title = "post3";
 			p.author = a2.id;
 			await db.InsertAsync(p);
-
 		}
 
 		public override async Task DeleteDbAsync() {

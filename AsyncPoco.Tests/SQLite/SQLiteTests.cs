@@ -12,6 +12,7 @@ namespace AsyncPoco.Tests.SQLite
 	{
 		protected override string ConnStrName { get; } = "sqlite";
 		protected override string ConnStr { get; } = @"Data Source=.\asyncpoco.sqlite;DateTimeKind=Utc";
+		protected override string DbProviderName { get; } = "System.Data.SQLite";
 	}
 }
 #endif
