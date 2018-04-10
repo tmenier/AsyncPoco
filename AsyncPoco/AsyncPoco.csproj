@@ -2,11 +2,11 @@
 
 	<PropertyGroup>
 		<PackageId>AsyncPoco</PackageId>
-		<Version>2.0.0-pre1</Version>
+		<Version>2.0.0-pre2</Version>
 		<TargetFrameworks>net45;netstandard1.3;netstandard2.0</TargetFrameworks>
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<Authors>Todd Menier</Authors>
-		<Description>A fully asynchronous fork of the popular PetaPoco micro-ORM, supporting data access using the TAP pattern and async/await keywords introduced in C# 5.0 and VB 11. All PetaPoco methods have been converted to their async equivalents (FetchAsync, InsertAsync, ExecuteAsync, etc.) where the underlying ADO.NET calls have async equivalents. Supports SQL Server, SQL Server CE, MySQL, and PostgreSQL.</Description>
+		<Description>A cross-platform, fully asynchronous fork of the popular PetaPoco micro-ORM. Supports SQL Server, Oracle, MySQL, PostgreSQL, SQLite, and SQL Server CE. Runs on .NET Framework (4.5 and above), .NET Core (1.0 and 2.0), Mono, Xamarin (iOS, Mac, and Android), and UWP.</Description>
 		<Copyright>Copyright 2018 Todd Menier</Copyright>
 		<PackageProjectUrl>https://github.com/tmenier/AsyncPoco</PackageProjectUrl>
 		<PackageLicenseUrl>https://raw.githubusercontent.com/CollaboratingPlatypus/PetaPoco/development/LICENSE.txt</PackageLicenseUrl>
@@ -20,27 +20,18 @@
 	  <DocumentationFile>bin\Release\AsyncPoco.xml</DocumentationFile>
 	</PropertyGroup>
 
+	<ItemGroup>
+		<PackageReference Include="System.Dynamic.Runtime" Version="4.3.0" />
+		<PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.3.0" />
+	</ItemGroup>
+
 	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard1.3'">
 	  <PackageReference Include="System.Data.SqlClient" Version="4.4.3" />
 		<PackageReference Include="System.Reflection.TypeExtensions" Version="4.4.0" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-		<PackageReference Include="System.Data.Common" Version="4.3.0" />
-		<PackageReference Include="System.Configuration.ConfigurationManager" Version="4.4.1" />
+	<ItemGroup Condition="'$(TargetFramework)' == 'net45'">
+		<Reference Include="System.Configuration" />
 	</ItemGroup>
-
-	<ItemGroup>
-	  <PackageReference Include="System.Dynamic.Runtime" Version="4.3.0" />
-	  <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.3.0" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Reference Include="System.Configuration" />
-	</ItemGroup>
-
-	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-	  <Exec Command="cd $(ProjectDir)&#xD;&#xA;PostBuild.bat $(ConfigurationName)" />
-	</Target>
 
 </Project>

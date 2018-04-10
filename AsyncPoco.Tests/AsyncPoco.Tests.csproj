@@ -1,71 +1,59 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net45;netcoreapp2.0;</TargetFrameworks>
+    <TargetFrameworks>net45;netcoreapp1.0;netcoreapp2.0</TargetFrameworks>
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="mysql_done.sql" />
-    <None Remove="mysql_init.sql" />
-    <None Remove="petapoco.sdf" />
-    <None Remove="postgresql_done.sql" />
-    <None Remove="postgresql_init.sql" />
-    <None Remove="sqlite_done.sql" />
-    <None Remove="sqlite_init.sql" />
-    <None Remove="sqlserverce_done.sql" />
-    <None Remove="sqlserverce_init.sql" />
-    <None Remove="sqlserver_done.sql" />
-    <None Remove="sqlserver_init.sql" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="petapoco.sdf">
+		<ContentWithTargetPath Include="SqlServerCE\petapoco.sdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+	    <TargetPath>petapoco.sdf</TargetPath>
+    </ContentWithTargetPath>
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="mysql_done.sql" />
-    <EmbeddedResource Include="mysql_init.sql" />
-    <EmbeddedResource Include="postgresql_done.sql" />
-    <EmbeddedResource Include="postgresql_init.sql" />
-    <EmbeddedResource Include="sqlite_done.sql" />
-    <EmbeddedResource Include="sqlite_init.sql" />
-    <EmbeddedResource Include="sqlserverce_done.sql" />
-    <EmbeddedResource Include="sqlserverce_init.sql" />
-    <EmbeddedResource Include="sqlserver_done.sql" />
-    <EmbeddedResource Include="sqlserver_init.sql" />
+    <EmbeddedResource Include="MySql\mysql_done.sql" />
+    <EmbeddedResource Include="MySql\mysql_init.sql" />
+    <EmbeddedResource Include="PostgreSql\postgresql_done.sql" />
+    <EmbeddedResource Include="PostgreSql\postgresql_init.sql" />
+    <EmbeddedResource Include="SQLite\sqlite_done.sql" />
+    <EmbeddedResource Include="SQLite\sqlite_init.sql" />
+    <EmbeddedResource Include="SqlServerCE\sqlserverce_done.sql" />
+    <EmbeddedResource Include="SqlServerCE\sqlserverce_init.sql" />
+    <EmbeddedResource Include="SqlServer\sqlserver_done.sql" />
+    <EmbeddedResource Include="SqlServer\sqlserver_init.sql" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.5.0" />
     <PackageReference Include="NUnit" Version="3.9.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="3.9.0" />
-    <PackageReference Include="Microsoft.SqlServer.Compact" version="4.0.8876.1" />
-    <PackageReference Include="MySqlConnector" version="0.30.0" />
-    <PackageReference Include="Npgsql" version="2.2.7" />
-    <PackageReference Include="SQLite" version="3.13.0" />
+		<PackageReference Include="MySqlConnector" version="0.30.0" />
     <PackageReference Include="System.Buffers" version="4.3.0" />
-    <PackageReference Include="System.Data.SQLite.Core" version="1.0.105.2" />
     <PackageReference Include="System.Threading.Tasks.Extensions" version="4.3.0" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net45'">
-    <Reference Include="Microsoft.CSharp" />
-  </ItemGroup>
+	<ItemGroup Condition="'$(TargetFramework)' != 'netcoreapp1.0'">
+		<PackageReference Include="Microsoft.SqlServer.Compact" version="4.0.8876.1" />
+		<PackageReference Include="System.Data.SQLite.Core" version="1.0.108" />
+		<PackageReference Include="Npgsql" version="2.2.7" />
+	</ItemGroup>
 
-  <ItemGroup>
+	<ItemGroup Condition="'$(TargetFramework)' != 'net45'">
+		<PackageReference Include="System.Data.SqlClient" version="4.4.3" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net45'">
+		<Reference Include="Microsoft.CSharp" version="4.4.1" />
+	</ItemGroup>
+
+	<ItemGroup>
     <ProjectReference Include="..\AsyncPoco\AsyncPoco.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Oracle\" />
     <Folder Include="Properties\" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'netcoreapp2.0'">
-    <PackageReference Include="System.Data.SqlClient">
-      <Version>4.4.3</Version>
-    </PackageReference>
   </ItemGroup>
 
 </Project>

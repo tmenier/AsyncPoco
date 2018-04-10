@@ -10,12 +10,12 @@ namespace AsyncPoco.Tests
 		public static string LoadTextResource(string name)
 		{
 			string result = "";
-			var assembly = Assembly.GetExecutingAssembly();
+			var assembly = typeof(Utils).GetTypeInfo().Assembly;
 			if (assembly.GetManifestResourceNames().Contains(name))
 			{
 				using (var stream = assembly.GetManifestResourceStream(name))
 				{
-					using (var reader = new StreamReader(stream, Encoding.Default))
+					using (var reader = new StreamReader(stream))
 					{
 						result = reader.ReadToEnd();
 					}

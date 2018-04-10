@@ -1,12 +1,19 @@
-﻿using NUnit.Framework;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using MySql.Data.MySqlClient;
+using NUnit.Framework;
 
-namespace AsyncPoco.Tests
+namespace AsyncPoco.Tests.MySql
 {
-	public class MultiPocoTests
+	public class MySqlTests : DatabaseTests<MySqlConnection>
 	{
+		protected override string ConnStrName { get; } = "mysql";
+		protected override string ConnStr { get; } = @"server=localhost;database=asyncpoco;user id=asyncpoco;password=asyncpoco;Allow User Variables=true";
+		protected override string DbProviderName { get; } = "MySql.Data.MySqlClient";
+
 		[TableName("posts")]
 		[PrimaryKey("id")]
 		public class post
@@ -29,19 +36,9 @@ namespace AsyncPoco.Tests
 			public List<post> posts { get; set; }
 		}
 
+		public override async Task CreateDbAsync() {
+			await base.CreateDbAsync();
 
-		public MultiPocoTests()
-		{
-			_connectionStringName = "mysql";
-		}
-
-		readonly string _connectionStringName;
-		Database db;
-
-		[OneTimeSetUp]
-		public async Task CreateDbAsync()
-		{
-			db = Database.Create<MySqlConnection>(ConnectionStrings.Get(_connectionStringName));
 			await db.ExecuteAsync(@"
 
 DROP TABLE IF EXISTS posts;
@@ -61,7 +58,6 @@ CREATE TABLE authors (
 ) ENGINE=INNODB;
 
 			");
-
 
 			var a1 = new author();
 			a1.name = "Bill";
@@ -85,21 +81,19 @@ CREATE TABLE authors (
 			p.title = "post3";
 			p.author = a2.id;
 			await db.InsertAsync(p);
-
 		}
 
-		[OneTimeTearDown]
-		public Task DeleteDbAsync()
-		{
-			return db.ExecuteAsync(@"
+		public override async Task DeleteDbAsync() {
+			await base.DeleteDbAsync();
+
+			await db.ExecuteAsync(@"
 DROP TABLE IF EXISTS posts;
 DROP TABLE IF EXISTS authors;
 			");
 		}
 
 		[Test]
-		public async Task Basic()
-		{
+		public async Task Basic() {
 			var posts = await db.FetchAsync<post, author>("SELECT * FROM posts LEFT JOIN authors ON posts.author = authors.id ORDER BY posts.id");
 			Assert.AreEqual(posts.Count, 3);
 
@@ -118,14 +112,13 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public async Task CustomRelator()
-		{
+		public async Task CustomRelator() {
 			var posts = await db.FetchAsync<post, author, post>(
 				(p, a) =>
-					{
-						p.author_obj = a;
-						return p;
-					},
+				{
+					p.author_obj = a;
+					return p;
+				},
 				"SELECT * FROM posts LEFT JOIN authors ON posts.author = authors.id ORDER BY posts.id");
 
 			Assert.AreEqual(posts.Count, 3);
@@ -150,8 +143,7 @@ DROP TABLE IF EXISTS authors;
 			// A dictionary of known authors
 			Dictionary<long, author> authors = new Dictionary<long, author>();
 
-			public post MapIt(post p, author a)
-			{
+			public post MapIt(post p, author a) {
 				// Get existing author object, or if not found store this one
 				author aExisting;
 				if (authors.TryGetValue(a.id, out aExisting))
@@ -166,8 +158,7 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public async Task ManyToOne()
-		{
+		public async Task ManyToOne() {
 			// This test uses a custom relator callback to connect posts to existing author instances
 			// Note that for each row, an author object is still created - it's just that the duplicates
 			// are discarded
@@ -213,8 +204,7 @@ DROP TABLE IF EXISTS authors;
 			 * 
 			 */
 			public author current;
-			public author MapIt(author a, post p)
-			{
+			public author MapIt(author a, post p) {
 				// Terminating call.  Since we can return null from this function
 				// we need to be ready for PetaPoco to callback later with null
 				// parameters
@@ -222,8 +212,7 @@ DROP TABLE IF EXISTS authors;
 					return current;
 
 				// Is this the same author as the current one we're processing
-				if (current != null && current.id == a.id)
-				{
+				if (current != null && current.id == a.id) {
 					// Yes, just add this post to the current author's collection of posts
 					current.posts.Add(p);
 
@@ -248,8 +237,7 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public async Task OneToMany()
-		{
+		public async Task OneToMany() {
 			// Example of OneToMany mappings
 
 			var authors = await db.FetchAsync<author, post, author>(new AuthorPostRelator().MapIt,
@@ -267,13 +255,11 @@ DROP TABLE IF EXISTS authors;
 		}
 
 		[Test]
-		public async Task ManyToOne_Lambda()
-		{
+		public async Task ManyToOne_Lambda() {
 			// same as ManyToOne test case above, but uses a lambda method as the callback
 			var authors = new Dictionary<long, author>();
 			var posts = await db.FetchAsync<post, author, post>(
-				(p, a) =>
-				{
+				(p, a) => {
 					// Get existing author object
 					author aExisting;
 					if (authors.TryGetValue(a.id, out aExisting))

@@ -1,93 +1,67 @@
 ﻿using System;
-using System.Data.SqlClient;
-using System.Data.SqlServerCe;
-using System.Data.SQLite;
+using System.Data.Common;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
-using MySql.Data.MySqlClient;
-using Npgsql;
 using NUnit.Framework;
 
 namespace AsyncPoco.Tests
 {
+	[TestFixture]
+	public abstract class DatabaseTests<TConnection> where TConnection : DbConnection, new()
+	{
+		protected abstract string ConnStrName { get; }
+		protected abstract string ConnStr { get; }
+		protected abstract string DbProviderName { get; }
+
+		protected static Random rand = new Random();
+		protected Database db;
+
+		private Func<Database>[] _dbFactories;
+
+		protected DatabaseTests() {
+			_dbFactories = new Func<Database>[] {
+				// one for each supported Database ctor or static Create method
+				() => Database.Create<TConnection>(ConnStr),
+				() => Database.Create(() => new TConnection { ConnectionString = ConnStr }),
+				() => {
+					var conn = new TConnection { ConnectionString = ConnStr };
+					conn.Open();
+					return new Database(conn);
+				},
 #if NET45
-	public class DatabaseTestsByConnStrName : DatabaseTests
-	{
-		public DatabaseTestsByConnStrName(string connStrName) : base(connStrName) { }
-
-		protected override Database GetDatabase(string connStrName) => new Database(connStrName);
-	}
+				() => new Database(ConnStrName),
+				() => new Database(ConnStr, DbProviderFactories.GetFactory(DbProviderName)),
+				() => new Database(ConnStr, DbProviderName)
 #endif
-
-	public class DatabaseTestsByConnType : DatabaseTests
-	{
-		public DatabaseTestsByConnType(string connStrName) : base(connStrName) { }
-
-		protected override Database GetDatabase(string connStrName) {
-			switch (connStrName) {
-				case "sqlserver": return Database.Create<SqlConnection>(ConnStr);
-				case "sqlserverce": return Database.Create<SqlCeConnection>(ConnStr);
-				case "mysql": return Database.Create<MySqlConnection>(ConnStr);
-				case "postgresql": return Database.Create<NpgsqlConnection>(ConnStr);
-				case "sqlite": return Database.Create<SQLiteConnection>(ConnStr);
-				default: return null;
-			}
-		}
-	}
-
-	public class DatabaseTestsByConnFactory : DatabaseTests
-	{
-		public DatabaseTestsByConnFactory(string connStrName) : base(connStrName) { }
-
-		protected override Database GetDatabase(string connStrName) {
-			switch (connStrName) {
-				case "sqlserver": return Database.Create(() => new SqlConnection(ConnStr));
-				case "sqlserverce": return Database.Create(() => new SqlCeConnection(ConnStr));
-				case "mysql": return Database.Create(() => new MySqlConnection(ConnStr));
-				case "postgresql": return Database.Create(() => new NpgsqlConnection(ConnStr));
-				case "sqlite": return Database.Create(() => new SQLiteConnection(ConnStr));
-				default: return null;
-			}
-		}
-	}
-
-	[TestFixture("sqlserver")]
-	[TestFixture("mysql")]
-	[TestFixture("postgresql")]
-	[TestFixture("sqlite")]
-#if NET45
-	[TestFixture("sqlserverce")]
-#endif
-	public abstract class DatabaseTests
-	{
-		protected string ConnStrName { get; set; }
-		protected string ConnStr { get; set; }
-	
-		Random r = new Random();
-		Database db;
-
-		public DatabaseTests(string connStrName)
-		{
-			ConnStrName = connStrName;
-			ConnStr = ConnectionStrings.Get(connStrName);
+			};
 		}
 
-		protected abstract Database GetDatabase(string connStrName);
+		private static int _dbFactoryCounter = rand.Next(10);
+
+		[SetUp]
+		public virtual void CreateDatabase() {
+			// There are 6 different ways to create a Database object. But having 6 variations of each test, for each db
+			// platform and each .NET flavor, would be obnoxious. Instead, pick one at random for the first test, then
+			// cycle through them round-robin for the rest.
+			var i = Interlocked.Increment(ref _dbFactoryCounter) % _dbFactories.Length;
+			Console.WriteLine("use factory " + i);
+			db = _dbFactories[i]();
+		}
 
 		[OneTimeSetUp]
-		public async Task CreateDbAsync()
+		public virtual async Task CreateDbAsync()
 		{
-			// db = new Database(_connectionStringName);
-			db = GetDatabase(ConnStrName);
-			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{ConnStrName}_init.sql");
+			var all = Utils.LoadTextResource($"{GetType().Namespace}.{ConnStrName}_init.sql");
+			CreateDatabase();
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
 
 		[OneTimeTearDown]
-		public async Task DeleteDbAsync()
-		{
-			var all = Utils.LoadTextResource($"{typeof(DatabaseTests).Namespace}.{ConnStrName}_done.sql");
+		public virtual async Task DeleteDbAsync() {
+			var all = Utils.LoadTextResource($"{GetType().Namespace}.{ConnStrName}_done.sql");
+			CreateDatabase();
 			foreach (var sql in all.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0))
 				await db.ExecuteAsync(sql);
 		}
@@ -116,9 +90,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			var o = new poco();
-			o.title = string.Format("insert {0}", r.Next());
+			o.title = string.Format("insert {0}", rand.Next());
 			o.draft = true;
-			o.content = string.Format("insert {0}", r.Next());
+			o.content = string.Format("insert {0}", rand.Next());
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = State.Yes;
@@ -137,9 +111,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			var o = new deco();
-			o.title = string.Format("insert {0}", r.Next());
+			o.title = string.Format("insert {0}", rand.Next());
 			o.draft = true;
-			o.content = string.Format("insert {0}", r.Next());
+			o.content = string.Format("insert {0}", rand.Next());
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = State.Maybe;
@@ -656,9 +630,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			var a = new deco();
-			a.title = string.Format("insert {0}", r.Next());
+			a.title = string.Format("insert {0}", rand.Next());
 			a.draft = true;
-			a.content = string.Format("insert {0}", r.Next());
+			a.content = string.Format("insert {0}", rand.Next());
 			a.date_created = now;
 			a.date_edited = null;
 
@@ -866,9 +840,9 @@ namespace AsyncPoco.Tests
 
 			// Setup a record
 			dynamic o = new System.Dynamic.ExpandoObject();
-			o.title = string.Format("insert {0}", r.Next());
+			o.title = string.Format("insert {0}", rand.Next());
 			o.draft = true;
-			o.content = string.Format("insert {0}", r.Next());
+			o.content = string.Format("insert {0}", rand.Next());
 			o.date_created = now;
 			o.date_edited = now;
 			o.state = (int)State.Maybe;

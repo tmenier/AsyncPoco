@@ -75,13 +75,10 @@ namespace AsyncPoco.Tests
 	[TestFixture]
 	public class ColumnMapper
 	{
-
-
 		[Test]
 		public void NoColumnMapper()
 		{
-
-			AsyncPoco.Mappers.Register(Assembly.GetExecutingAssembly(), new MyColumnMapper());
+			AsyncPoco.Mappers.Register(GetType().GetTypeInfo().Assembly, new MyColumnMapper());
 			var pd = AsyncPoco.Internal.PocoData.ForType(typeof(Poco2));
 
 			Assert.AreEqual(pd.Columns.Count, 3);
@@ -92,7 +89,7 @@ namespace AsyncPoco.Tests
 			Assert.AreEqual(pd.TableInfo.PrimaryKey, "id");
 			Assert.AreEqual(pd.TableInfo.TableName, "petapoco");
 
-			AsyncPoco.Mappers.Revoke(Assembly.GetExecutingAssembly());
+			AsyncPoco.Mappers.Revoke(GetType().GetTypeInfo().Assembly);
 		}
 	}
 }
