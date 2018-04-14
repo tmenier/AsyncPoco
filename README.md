@@ -1,5 +1,7 @@
 # AsyncPoco
 
+***2.0 is here! For details and help transitioning from 1.x, check out the [upgrade guide](https://github.com/tmenier/AsyncPoco/wiki/2.0-Upgrade-Guide).***
+
 AsyncPoco is a fork of the popular PetaPoco micro-ORM for .NET, with a fully asynchronous API and broad cross-platform support, including .NET Core. If you're familiar with PetaPoco and the [TAP pattern](http://msdn.microsoft.com/en-us/library/hh873175.aspx) (i.e. `async`/`await`), the transition to AsyncPoco should be quite intuitive.
 
 ```C#
