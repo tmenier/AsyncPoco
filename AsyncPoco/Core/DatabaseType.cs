@@ -145,7 +145,8 @@ namespace AsyncPoco.Internal
 					return Singleton<PostgreSQLDatabaseType>.Instance;
 				if (TypeName.StartsWith("Oracle"))
 					return Singleton<OracleDatabaseType>.Instance;
-				if (TypeName.StartsWith("SQLite"))
+			    //support both System.Data.SQLite and Microsoft.Data.SQLite
+			    if (TypeName.StartsWith("SQLite") || TypeName.StartsWith("Sqlite"))
 					return Singleton<SQLiteDatabaseType>.Instance;
 				if (TypeName.StartsWith("System.Data.SqlClient."))
 					return Singleton<SqlServerDatabaseType>.Instance;
