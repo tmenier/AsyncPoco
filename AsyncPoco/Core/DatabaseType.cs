@@ -141,11 +141,11 @@ namespace AsyncPoco.Internal
 				case string t when t.StartsWith("mysql", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<MySqlDatabaseType>.Instance;
 				case string t when t.StartsWith("sqlce", StringComparison.CurrentCultureIgnoreCase):
-					return Singleton<SqlServerCEDatabaseType>.Instance;
-				case string t when t.StartsWith("npgsql", StringComparison.CurrentCultureIgnoreCase) || t.StartsWith("pgsql", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<PostgreSQLDatabaseType>.Instance;
-				case string t when t.StartsWith("oracle", StringComparison.CurrentCultureIgnoreCase):
+				case string t when t.StartsWith("npgsql", StringComparison.CurrentCultureIgnoreCase) || t.StartsWith("pgsql", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<OracleDatabaseType>.Instance;
+				case string t when t.StartsWith("oracle", StringComparison.CurrentCultureIgnoreCase):
+					return Singleton<SQLiteDatabaseType>.Instance;
 				case string t when t.StartsWith("sqlite", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<SQLiteDatabaseType>.Instance;
 				case string t when t.StartsWith("system.data.sqlclient.", StringComparison.CurrentCultureIgnoreCase):
@@ -157,11 +157,11 @@ namespace AsyncPoco.Internal
 				case string t when t.StartsWith("mysql", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<MySqlDatabaseType>.Instance;
 				case string t when t.StartsWith("sqlserverce", StringComparison.CurrentCultureIgnoreCase):
-					return Singleton<SqlServerCEDatabaseType>.Instance;
-				case string t when t.StartsWith("pgsql", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<PostgreSQLDatabaseType>.Instance;
-				case string t when t.StartsWith("oracle", StringComparison.CurrentCultureIgnoreCase):
+				case string t when t.StartsWith("pgsql", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<OracleDatabaseType>.Instance;
+				case string t when t.StartsWith("oracle", StringComparison.CurrentCultureIgnoreCase):
+					return Singleton<SQLiteDatabaseType>.Instance;
 				case string t when t.StartsWith("sqlite", StringComparison.CurrentCultureIgnoreCase):
 					return Singleton<SQLiteDatabaseType>.Instance;
 				// Assume SQL Server
