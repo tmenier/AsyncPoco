@@ -137,17 +137,17 @@ namespace AsyncPoco.Internal
 		{
 			// Try using type name first (more reliable)
 			if (!string.IsNullOrEmpty(TypeName)) {
-				if (TypeName.StartsWith("MySql"))
+				if (TypeName.StartsWith("MySql", StringComparison.OrdinalIgnoreCase))
 					return Singleton<MySqlDatabaseType>.Instance;
-				if (TypeName.StartsWith("SqlCe"))
+				if (TypeName.StartsWith("SqlCe", StringComparison.OrdinalIgnoreCase))
 					return Singleton<SqlServerCEDatabaseType>.Instance;
-				if (TypeName.StartsWith("Npgsql") || TypeName.StartsWith("PgSql"))
+				if (TypeName.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase) || TypeName.StartsWith("PgSql", StringComparison.OrdinalIgnoreCase))
 					return Singleton<PostgreSQLDatabaseType>.Instance;
-				if (TypeName.StartsWith("Oracle"))
+				if (TypeName.StartsWith("Oracle", StringComparison.OrdinalIgnoreCase))
 					return Singleton<OracleDatabaseType>.Instance;
-				if (TypeName.StartsWith("SQLite"))
+				if (TypeName.StartsWith("SQLite", StringComparison.OrdinalIgnoreCase))
 					return Singleton<SQLiteDatabaseType>.Instance;
-				if (TypeName.StartsWith("System.Data.SqlClient."))
+				if (TypeName.StartsWith("System.Data.SqlClient.", StringComparison.OrdinalIgnoreCase))
 					return Singleton<SqlServerDatabaseType>.Instance;
 			}
 
