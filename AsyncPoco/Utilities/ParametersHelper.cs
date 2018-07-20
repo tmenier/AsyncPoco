@@ -13,7 +13,7 @@ namespace AsyncPoco.Internal
 	internal static class ParametersHelper
 	{
 		// Helper to handle named parameters from object properties
-		public static string ProcessParams(string sql, object[] args_src, List<object> args_dest)
+		public static string ProcessParams(string sql, object[] args_src, List<object> args_dest, bool expandCollectionParameters)
 		{
 			return rxParams.Replace(sql, m =>
 			{
@@ -50,7 +50,8 @@ namespace AsyncPoco.Internal
 				}
 
 				// Expand collections to parameter lists
-				if ((arg_val as System.Collections.IEnumerable) != null &&
+				if (expandCollectionParameters &&
+				    (arg_val as System.Collections.IEnumerable) != null &&
 					(arg_val as string) == null &&
 					(arg_val as byte[]) == null)
 				{

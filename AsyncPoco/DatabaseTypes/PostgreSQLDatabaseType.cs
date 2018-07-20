@@ -1,4 +1,4 @@
-﻿// AsyncPoco is a fork of PetaPoco and is bound by the same licensing terms.
+// AsyncPoco is a fork of PetaPoco and is bound by the same licensing terms.
 // PetaPoco - A Tiny ORMish thing for your POCO's.
 // Copyright © 2011-2012 Topten Software.  All Rights Reserved.
 
@@ -11,6 +11,8 @@ namespace AsyncPoco.DatabaseTypes
 {
 	class PostgreSQLDatabaseType : DatabaseType
 	{
+	    public override bool SupportsArraySqlParameters { get; } = true;
+
 		public override object MapParameterValue(object value)
 		{
 			// Don't map bools to ints in PostgreSQL

@@ -1,4 +1,4 @@
-﻿/* AsyncPoco is a fork of PetaPoco and is bound by the same licensing terms.
+/* AsyncPoco is a fork of PetaPoco and is bound by the same licensing terms.
  *
  * PetaPoco - A Tiny ORMish thing for your POCO's.
  * Copyright © 2011-2012 Topten Software.  All Rights Reserved.
@@ -406,7 +406,9 @@ namespace AsyncPoco
 			// Perform named argument replacements
 			if (EnableNamedParams) {
 				var new_args = new List<object>();
-				sql = ParametersHelper.ProcessParams(sql, args, new_args);
+                var expandCollectionBasedParams = 
+                    _dbType.SupportsArraySqlParameters && EnableExpandSqlParametersToLists;
+				sql = ParametersHelper.ProcessParams(sql, args, new_args, expandCollectionBasedParams);
 				args = new_args.ToArray();
 			}
 
@@ -2137,6 +2139,13 @@ namespace AsyncPoco
 		/// Sets the timeout value for the next (and only next) SQL statement
 		/// </summary>
 		public int OneTimeCommandTimeout { get; set; }
+
+        /// <summary>
+        /// When true then any encountered collection type sql parameter value is 'magically' expanded into multiple parameters. 
+        /// Some databases (Postgresql via Npgsql) support passing arrays.
+        /// For backward compatibility this feature is disabled by default.
+        /// </summary>
+        public bool EnableExpandSqlParametersToLists {get; set;} = true;
 
 		#endregion
 
