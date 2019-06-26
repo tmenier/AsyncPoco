@@ -25,11 +25,11 @@ namespace AsyncPoco.DatabaseTypes
 			if (PrimaryKeyName != null)
 			{
 				cmd.CommandText += ";\nSELECT last_insert_rowid();";
-				return await db.ExecuteScalarHelperAsync(cmd);
+				return await db.ExecuteScalarHelperAsync(cmd).ConfigureAwait(false);
 			}
 			else
 			{
-				await db.ExecuteNonQueryHelperAsync(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd).ConfigureAwait(false);
 				return -1;
 			}
 		}

@@ -30,11 +30,11 @@ namespace AsyncPoco.DatabaseTypes
 			if (PrimaryKeyName != null && !PrimaryKeyName.Contains(","))
 			{
 				cmd.CommandText += string.Format("returning {0} as NewID", EscapeSqlIdentifier(PrimaryKeyName));
-				return await db.ExecuteScalarHelperAsync(cmd);
+				return await db.ExecuteScalarHelperAsync(cmd).ConfigureAwait(false);
 			}
 			else
 			{
-				await db.ExecuteNonQueryHelperAsync(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd).ConfigureAwait(false);
 				return -1;
 			}
 		}
