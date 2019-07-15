@@ -193,7 +193,7 @@ namespace AsyncPoco
 					_sharedConnection.Close();
 
 				if (_sharedConnection.State == ConnectionState.Closed)
-					await _sharedConnection.OpenAsync();
+					await _sharedConnection.OpenAsync().ConfigureAwait(false);
 
 				_sharedConnection = OnConnectionOpened(_sharedConnection);
 
@@ -270,7 +270,7 @@ namespace AsyncPoco
 			_transactionDepth++;
 
 			if (_transactionDepth == 1) {
-				await OpenSharedConnectionAsync();
+				await OpenSharedConnectionAsync().ConfigureAwait(false);
 				_transaction = _sharedConnection.BeginTransaction();
 				_transactionCancelled = false;
 				OnBeginTransaction();
@@ -496,10 +496,10 @@ namespace AsyncPoco
 		/// <returns>The number of rows affected</returns>
 		public virtual async Task<int> ExecuteAsync(string sql, params object[] args) {
 			try {
-				await OpenSharedConnectionAsync();
+				await OpenSharedConnectionAsync().ConfigureAwait(false);
 				try {
 					using (var cmd = CreateCommand(_sharedConnection, sql, args)) {
-						var retv = await cmd.ExecuteNonQueryAsync();
+						var retv = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 						OnExecutedCommand(cmd);
 						return retv;
 					}
@@ -537,10 +537,10 @@ namespace AsyncPoco
 		/// <returns>The scalar value cast to T</returns>
 		public virtual async Task<T> ExecuteScalarAsync<T>(string sql, params object[] args) {
 			try {
-				await OpenSharedConnectionAsync();
+				await OpenSharedConnectionAsync().ConfigureAwait(false);
 				try {
 					using (var cmd = CreateCommand(_sharedConnection, sql, args)) {
-						var val = await cmd.ExecuteScalarAsync();
+						var val = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
 						OnExecutedCommand(cmd);
 
 						// Handle nullable types
@@ -585,7 +585,7 @@ namespace AsyncPoco
 		/// <returns>A List holding the results of the query</returns>
 		public async Task<List<T>> FetchAsync<T>(string sql, params object[] args) {
 			var list = new List<T>();
-			await QueryAsync<T>(sql, args, v => list.Add(v));
+			await QueryAsync<T>(sql, args, v => list.Add(v)).ConfigureAwait(false);
 			return list;
 		}
 
@@ -654,8 +654,8 @@ namespace AsyncPoco
 			var result = new Page<T> {
 				CurrentPage = page,
 				ItemsPerPage = itemsPerPage,
-				TotalItems = await ExecuteScalarAsync<long>(sqlCount, countArgs)
-			};
+				TotalItems = await ExecuteScalarAsync<long>(sqlCount, countArgs).ConfigureAwait(false)
+            };
 			result.TotalPages = result.TotalItems / itemsPerPage;
 
 			if (result.TotalItems % itemsPerPage != 0)
@@ -664,7 +664,7 @@ namespace AsyncPoco
 			OneTimeCommandTimeout = saveTimeout;
 
 			// Get the records
-			result.Items = await FetchAsync<T>(sqlPage, pageArgs);
+			result.Items = await FetchAsync<T>(sqlPage, pageArgs).ConfigureAwait(false);
 
 			// Done
 			return result;
@@ -870,13 +870,13 @@ namespace AsyncPoco
 			if (EnableAutoSelect)
 				sql = AutoSelectHelper.AddSelectClause<T>(_dbType, sql);
 
-			await OpenSharedConnectionAsync();
+			await OpenSharedConnectionAsync().ConfigureAwait(false);
 			try {
 				using (var cmd = CreateCommand(_sharedConnection, sql, args)) {
 					DbDataReader r;
 					var pd = PocoData.ForType(typeof(T));
 					try {
-						r = await cmd.ExecuteReaderAsync();
+						r = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
 						OnExecutedCommand(cmd);
 					}
 					catch (Exception x) {
@@ -893,7 +893,7 @@ namespace AsyncPoco
 						while (keepGoing) {
 							T poco;
 							try {
-								if (!await r.ReadAsync())
+								if (!await r.ReadAsync().ConfigureAwait(false))
 									break;
 
 								poco = factory(r);
@@ -958,7 +958,8 @@ namespace AsyncPoco
 		/// <returns>True if a record matching the condition is found.</returns>
 		public async Task<bool> ExistsAsync<T>(string sqlCondition, params object[] args) {
 			var poco = PocoData.ForType(typeof(T)).TableInfo;
-			var result = await ExecuteScalarAsync<int>(string.Format(_dbType.GetExistsSql(), poco.TableName, sqlCondition), args);
+			var result = await ExecuteScalarAsync<int>(string.Format(_dbType.GetExistsSql(), poco.TableName, sqlCondition), args)
+			    .ConfigureAwait(false);
 			return result != 0;
 		}
 
@@ -1021,11 +1022,13 @@ namespace AsyncPoco
 		public async Task<T> SingleAsync<T>(string sql, params object[] args) {
 			var count = 0;
 			var poco = default(T);
+
 			await QueryAsync<T>(sql, args, v => {
 				poco = v;
 				count++;
 				return count <= 2;
-			});
+			}).ConfigureAwait(false);
+
 			if (count == 0)
 				throw new InvalidOperationException("Sequence contains no elements.");
 			if (count > 1)
@@ -1044,11 +1047,13 @@ namespace AsyncPoco
 		public async Task<T> SingleOrDefaultAsync<T>(string sql, params object[] args) {
 			var count = 0;
 			var poco = default(T);
+
 			await QueryAsync<T>(sql, args, v => {
 				poco = v;
 				count++;
 				return count <= 2;
-			});
+			}).ConfigureAwait(false);
+
 			if (count > 1)
 				throw new InvalidOperationException("Sequence contains more than one element.");
 
@@ -1065,11 +1070,13 @@ namespace AsyncPoco
 		public async Task<T> FirstAsync<T>(string sql, params object[] args) {
 			var gotIt = false;
 			var poco = default(T);
+
 			await QueryAsync<T>(sql, args, v => {
 				poco = v;
 				gotIt = true;
 				return false;
-			});
+			}).ConfigureAwait(false);
+
 			if (!gotIt)
 				throw new InvalidOperationException("Sequence contains no elements.");
 
@@ -1085,10 +1092,12 @@ namespace AsyncPoco
 		/// <returns>The first record in the result set, or default(T) if no matching rows</returns>
 		public async Task<T> FirstOrDefaultAsync<T>(string sql, params object[] args) {
 			var poco = default(T);
+
 			await QueryAsync<T>(sql, args, v => {
 				poco = v;
 				return false;
-			});
+			}).ConfigureAwait(false);
+
 			return poco;
 		}
 
@@ -1165,7 +1174,7 @@ namespace AsyncPoco
 		/// </remarks>
 		public virtual async Task<object> InsertAsync(string tableName, string primaryKeyName, bool autoIncrement, object poco) {
 			try {
-				await OpenSharedConnectionAsync();
+				await OpenSharedConnectionAsync().ConfigureAwait(false);
 				try {
 					using (var cmd = CreateCommand(_sharedConnection, "")) {
 						var pd = PocoData.ForObject(poco, primaryKeyName);
@@ -1213,7 +1222,7 @@ namespace AsyncPoco
 
 						if (!autoIncrement) {
 							DoPreExecute(cmd);
-							await cmd.ExecuteNonQueryAsync();
+							await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 							OnExecutedCommand(cmd);
 
 							PocoColumn pkColumn;
@@ -1224,7 +1233,7 @@ namespace AsyncPoco
 						}
 
 
-						var id = await _dbType.ExecuteInsertAsync(this, cmd, primaryKeyName);
+						var id = await _dbType.ExecuteInsertAsync(this, cmd, primaryKeyName).ConfigureAwait(false);
 
 						// Assign the ID back to the primary key property
 						if (primaryKeyName != null) {
@@ -1290,7 +1299,7 @@ namespace AsyncPoco
 		public virtual async Task<int> UpdateAsync(string tableName, string primaryKeyName, object poco,
 			object primaryKeyValue, IEnumerable<string> columns) {
 			try {
-				await OpenSharedConnectionAsync();
+				await OpenSharedConnectionAsync().ConfigureAwait(false);
 				try {
 					// update
 					using (var cmd = CreateCommand(_sharedConnection, "")) {
@@ -1351,7 +1360,7 @@ namespace AsyncPoco
 						DoPreExecute(cmd);
 
 						// Do it
-						var retv = await cmd.ExecuteNonQueryAsync();
+						var retv = await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 						OnExecutedCommand(cmd);
 						return retv;
 					}
@@ -1991,7 +2000,7 @@ namespace AsyncPoco
 		/// <returns>A collection of POCO's as a List</returns>
 		public async Task<List<TRet>> FetchAsync<TRet>(Type[] types, object cb, string sql, params object[] args) {
 			var list = new List<TRet>();
-			await QueryAsync<TRet>(types, cb, sql, args, list.Add);
+			await QueryAsync<TRet>(types, cb, sql, args, list.Add).ConfigureAwait(false);
 			return list;
 		}
 
@@ -2005,12 +2014,12 @@ namespace AsyncPoco
 		/// <param name="args">Arguments to any embedded parameters in the SQL</param>
 		/// <param name="action">Callback to process each result</param>
 		public virtual async Task QueryAsync<TRet>(Type[] types, object cb, string sql, object[] args, Action<TRet> action) {
-			await OpenSharedConnectionAsync();
+			await OpenSharedConnectionAsync().ConfigureAwait(false);
 			try {
 				using (var cmd = CreateCommand(_sharedConnection, sql, args)) {
 					DbDataReader r;
 					try {
-						r = await cmd.ExecuteReaderAsync();
+						r = await cmd.ExecuteReaderAsync().ConfigureAwait(false);
 						OnExecutedCommand(cmd);
 					}
 					catch (Exception x) {
@@ -2027,7 +2036,7 @@ namespace AsyncPoco
 						while (true) {
 							TRet poco;
 							try {
-								if (!await r.ReadAsync())
+								if (!await r.ReadAsync().ConfigureAwait(false))
 									break;
 								poco = factory(r, cb);
 							}
@@ -2157,13 +2166,13 @@ namespace AsyncPoco
 
 		internal async Task ExecuteNonQueryHelperAsync(DbCommand cmd) {
 			DoPreExecute(cmd);
-			await cmd.ExecuteNonQueryAsync();
+			await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 			OnExecutedCommand(cmd);
 		}
 
 		internal async Task<object> ExecuteScalarHelperAsync(DbCommand cmd) {
 			DoPreExecute(cmd);
-			var r = await cmd.ExecuteScalarAsync();
+			var r = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
 			OnExecutedCommand(cmd);
 			return r;
 		}

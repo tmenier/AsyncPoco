@@ -56,12 +56,12 @@ namespace AsyncPoco.DatabaseTypes
 				param.Direction = ParameterDirection.ReturnValue;
 				param.DbType = DbType.Int64;
 				cmd.Parameters.Add(param);
-				await db.ExecuteNonQueryHelperAsync(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd).ConfigureAwait(false);
 				return param.Value;
 			}
 			else
 			{
-				await db.ExecuteNonQueryHelperAsync(cmd);
+				await db.ExecuteNonQueryHelperAsync(cmd).ConfigureAwait(false);
 				return -1;
 			}
 		}

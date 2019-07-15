@@ -20,7 +20,7 @@ namespace AsyncPoco
 		public static async Task<ITransaction> BeginAsync(Database db) 
 		{
 			var trans = new Transaction(db);
-			await db.BeginTransactionAsync();
+			await db.BeginTransactionAsync().ConfigureAwait(false);
 			return trans;
 		}
 
