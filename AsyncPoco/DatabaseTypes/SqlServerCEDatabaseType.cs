@@ -21,8 +21,8 @@ namespace AsyncPoco.DatabaseTypes
 
 		public override async Task<object> ExecuteInsertAsync(Database db, DbCommand cmd, string PrimaryKeyName)
 		{
-			await db.ExecuteNonQueryHelperAsync(cmd);
-			return await db.ExecuteScalarAsync<object>("SELECT @@@IDENTITY AS NewID;");
+			await db.ExecuteNonQueryHelperAsync(cmd).ConfigureAwait(false);
+			return await db.ExecuteScalarAsync<object>("SELECT @@@IDENTITY AS NewID;").ConfigureAwait(false);
 		}
 
 	}
